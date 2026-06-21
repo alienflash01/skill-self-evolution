@@ -1,0 +1,31 @@
+{
+  "name": "GITM (Ghost in the Minecraft)",
+  "institution": "上海人工智能实验室 (OpenGVLab) / 清华大学",
+  "release_date": "2023-05-25",
+  "paper_link": "https://arxiv.org/abs/2305.17144",
+  "code_link": "https://github.com/OpenGVLab/GITM",
+  "type": "学术",
+  "what_evolved": "上下文记忆与提示词（基于文本的知识与记忆）；LLM 权重冻结（通过 API 调用 GPT）。通过积累成功的动作列表摘要构建文本记忆，并从 Minecraft 维基/配方中构建文本知识库。",
+  "skill_as_artifact": "是。成功的计划会被记录并总结为可复用的文本记忆条目（『通用解』），作为后续规划的参考。",
+  "skill_encoding": "自然语言（来自 Minecraft Wiki/配方的文本知识；成功结构化动作序列的文本摘要）。尽管论文使用了『知识图谱 (knowledge graph)』的表述，但并非形式化的图结构。",
+  "skill_granularity": "子任务工作流：LLM Decomposer 将目标分解为子目标树；LLM Planner 为每个子目标生成结构化动作序列（探索/接近/挖掘/装备/熔炼等）。",
+  "how_method": "无梯度/RL 模型训练。通过 API 调用冻结的 GPT。学习方式是将成功的动作列表记录并总结为文本记忆，作为可复用的参考（自生成的成功轨迹示范 / 上下文示例）。最接近基于自身成功 rollout 的模仿示范 (imitation_demonstration) + 上下文记忆复用。",
+  "learning_signal_source": "成功/失败轨迹：LLM Interface 返回执行反馈（成功/失败 + 物品栏变化）；仅成功的计划会被总结并存储。",
+  "reward_granularity": "混合：逐动作的执行反馈（成功/失败、物品栏增量）加上子目标结果（目标是否达成）。",
+  "learning_paradigm": "在线、on-policy（智能体在实时任务执行中自行生成计划/轨迹并积累记忆）。",
+  "when_evolve": "测试期间（任务执行时在线），记忆在子目标/尝试之间累积延续，以增强后续规划。",
+  "trigger": "事件触发：成功事件将计划存储/总结到记忆中；失败事件触发 LLM Planner 对计划进行修正。",
+  "library_structure": "基于文本：(1) 来自 Minecraft Wiki 和游戏内配方的静态文本知识库；(2) 由成功动作列表摘要构成的扁平、不断增长的文本记忆。",
+  "retrieval_method": "将相关文本知识/记忆作为参考上下文输入给 LLM 用于规划（生成式检索 / 语义上下文选择）。[uncertain: 论文未详细说明确切的检索/排序机制]",
+  "validation": "基于执行：LLM Interface 根据真实环境观测（成功/失败、物品栏状态）验证每个结构化动作。",
+  "error_correction": "自我修正：执行失败反馈给 LLM Planner，由其迭代地修正/优化动作计划。",
+  "test_env": "Minecraft（开放世界、长时程合成/生存任务，ObtainDiamond 基准，完整的 Overworld 科技树）。",
+  "backbone_model": "LLM Decomposer 和 LLM Planner 使用 GPT-3.5 (text-davinci)；LLM Interface 使用硬编码的键盘/鼠标脚本。",
+  "where_deploy": "专用（Minecraft / 开放世界游戏智能体）。",
+  "metrics": "success_rate (ObtainDiamond 成功率)、泛化能力（完整科技树覆盖率）、sample_efficiency / 训练成本（CPU 与 GPU 天数对比）、skill_library_growth（由文本记忆积累得出的学习曲线）。",
+  "key_results": "ObtainDiamond 成功率 67.5%（较 OpenAI VPT 20% 的 SOTA 高 47.5%）；首个获取全部 262 件 Overworld 物品的智能体（科技树覆盖率 100%，而此前所有方法合计仅 30%）；效率高出约 10,000 倍（在 32 核 CPU 上耗时 2 天，无需 GPU），而 VPT 为 6,480 GPU-天，DreamerV3 为 17 GPU-天。",
+  "limitations": "可迁移性（文本知识为 Minecraft 专用，底层接口脚本为硬编码）；可扩展性（依赖 LLM 推理质量和 API 成本；结构化动作集为手工设计）；仅限于基于文本的观测，而非原始像素。",
+  "uncertain": [
+    "retrieval_method"
+  ]
+}

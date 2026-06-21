@@ -1,0 +1,31 @@
+{
+  "name": "SkillWeaver",
+  "institution": "俄亥俄州立大学 (OSU-NLP-Group)、弗吉尼亚大学、普渡大学、卡内基梅隆大学、Cisco Research",
+  "release_date": "2025-04-09",
+  "paper_link": "https://arxiv.org/abs/2504.07079",
+  "code_link": "https://github.com/OSU-NLP-Group/SkillWeaver",
+  "type": "academic",
+  "what_evolved": "工具技能 (skill library / API action space)。一个不断增长的、可复用的 Python-API 技能库;不更新任何模型权重——演化完全发生在外部的技能/工件层。",
+  "skill_as_artifact": "是。技能以独立的、即插即用的、可迁移的工件形式存在:Python 函数(Playwright 浏览器自动化代码),每个函数包含签名、docstring(含使用日志 + 前置状态)以及代码体,存储于知识库中并在多个 agent 间共享。",
+  "skill_encoding": "可执行代码 / API。每个技能是一个封装 Playwright 动作的 Python 函数,并附带记录先前执行情况与所需前置条件的自然语言 docstring。",
+  "skill_granularity": "子任务级 workflow。三类任务被抽象为单一可调用的 API:过程型(多步骤自动化)、导航型(站点映射)和信息检索型(抓取)。",
+  "how_method": "rollout 优化(非梯度)+ 模仿演示 (imitation demonstration)。三阶段流程:(I)技能提议(LLM 自动课程提出多样化技能)、(II)技能合成(agent 练习任务;LLM 奖励模型判断成功与否;将成功的状态-动作轨迹借助静态分析蒸馏为通用化的 Python API)、(III)技能打磨(自动生成测试用例 + 环境反馈来调试/优化 API)。不涉及任何梯度更新。",
+  "learning_signal_source": "成败轨迹(成功/失败的练习轨迹)+ LLM-as-judge(LLM 奖励模型从轨迹 + 截图 + 环境反馈中提供任务完成信号)。",
+  "reward_granularity": "结果级(outcome,奖励模型对每次练习尝试判断二元的任务完成是否成功)。",
+  "learning_paradigm": "在线交互式探索(agent 在真实环境中执行)结合离线技能蒸馏;on-policy(agent 从自身轨迹中学习)。",
+  "when_evolve": "测试间期 (inter-test-time)。一个自主驱动的课程探索/合成阶段在任务执行之前于新网站上离线运行;随后在测试时复用这些技能。打磨也会在练习期间/之后发生。",
+  "trigger": "课程驱动(curriculum,LLM 充当自动课程提出新颖技能)+ 失败触发(测试期间的运行时错误触发 API 修补/恢复)。",
+  "library_structure": "技能文件 / 按网站划分的扁平知识库。合成的 API 以代码文件形式存储(如 kb_post_code.py)并附带元数据;在多轮探索迭代中不断扩展。",
+  "retrieval_method": "代码直接复用——合成的 API 作为可调用工具被加载进 agent 的动作空间(Browser-Use 将 KB 转换为扩展动作空间的 Controller);LLM 根据任务选择要调用的 API。[uncertain]",
+  "validation": "基于执行(自动生成的单元测试以独立方式或带 LLM 生成参数运行该 API)+ LLM-judge(奖励模型)+ 验证门控(默认只暴露经过验证、无错误的 API;通过 --allow-unverified-apis 标志控制此行为)。",
+  "error_correction": "通过有限补丁进行自我修订 (self-revision)。在测试期间的运行时异常发生时(--allow-recovery),agent 定位出错区段(如模糊的 DOM 选择器)并应用定向 diff 以使 API 更加鲁棒。",
+  "test_env": "Web——WebArena(Gitlab、Map、Shopping、CMS、Reddit)以及真实在线网站(Online-Mind2Web:Drug、Flight、Cooking、Car)。",
+  "backbone_model": "GPT-4o(默认 agent / API 合成 / 成功判定 LM);GPT-4o-mini 作为较弱 agent 进行了测试;支持 Azure OpenAI。",
+  "where_deploy": "专用领域(web/GUI 自动化)。面向通用自主网页导航的 agent。",
+  "metrics": "success_rate(相对提升)、generalization(跨 agent 与跨网站迁移)、skill_library_growth(每轮迭代)、cost。",
+  "key_results": "WebArena:相对 success rate +31.8%(GPT-4o 22.6→29.8;GPT-4o-mini +45%,在 CMS 上最高 +133%)。真实 Online-Mind2Web:+39.8%(40.2→56.2)。跨 agent 迁移:来自强 agent 的 API 在 WebArena 上将较弱 agent 最多提升 +54.3%。约 160 轮探索迭代即可获得收益。",
+  "limitations": "可迁移性/可扩展性:依赖 accessibility-tree DOM 解析——无法解析为自然 accessibility 树的网站会阻碍性能;每个网站的探索成本。可控性:agent 有时无法调用或误用生成的 API。技能质量依赖于骨干模型(弱模型会产生有缺陷/不可复用的技能)。",
+  "uncertain": [
+    "retrieval_method"
+  ]
+}

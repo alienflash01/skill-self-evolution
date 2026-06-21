@@ -1,0 +1,31 @@
+{
+  "name": "Agent Workflow Memory (AWM)",
+  "institution": "Carnegie Mellon University & MIT (authors: Zora Zhiruo Wang, Daniel Fried, Graham Neubig [CMU]; Jiayuan Mao [MIT])",
+  "release_date": "2024-09-11 (arXiv v1; later accepted to ICML 2025)",
+  "paper_link": "https://arxiv.org/abs/2409.07429",
+  "code_link": "https://github.com/zorazrw/agent-workflow-memory",
+  "type": "academic",
+  "what_evolved": "Context记忆与提示 (Context memory & prompt) — induced workflows are integrated into the agent's text memory M (system/auxiliary prompt); no model weight updates.",
+  "skill_as_artifact": "Yes — each workflow is an independent reusable artifact consisting of an NL description (high-level goal) + a trajectory of steps (environment state description, agent reasoning, executable action), abstracting out example-specific contexts; stored in a workflow memory.",
+  "skill_encoding": "自然语言 (natural language) — workflow description plus NL state descriptions and actions as executable programs (e.g. CLICK, TYPE, stop()); segmented and stored as text blocks.",
+  "skill_granularity": "子任务workflow (sub-task workflows) — common reusable sub-routines at a finer granularity than full tasks, e.g. \"search for a product\", \"find a place by its name\", with example-specific values abstracted into placeholders like {product-name}.",
+  "how_method": "rollout_optimization (非梯度, text-space optimization) — LM-based induction module I prompts the agent to extract common sub-routines from experience trajectories and abstracts example-specific contexts; no gradients/SFT/RL. Operates in (a) offline: induce workflows from ground-truth annotated training examples; (b) online: induce from self-generated successful trajectories during streaming test inference.",
+  "learning_signal_source": "成败轨迹 (success/failure trajectories) — offline uses ground-truth annotated demonstrations; online uses self-generated trajectories judged successful by an LM-based evaluator (Pan et al. 2024 AutoEval binary label), only inducing workflows from judged-successful experiences.",
+  "reward_granularity": "outcome (binary task-level success label for online gating; no per-step/process reward).",
+  "learning_paradigm": "Both offline and online. Offline = off-policy (induces from given annotated examples before test). Online = on-policy streaming (induces from the agent's own predicted trajectories over test queries, in a streaming induce-integrate-utilize loop).",
+  "when_evolve": "Both intra-test-time and inter-test-time. Online AWM evolves during task execution/streaming test-time (intra-test-time); offline AWM induces workflows before test-time inference (inter-test-time).",
+  "trigger": "事件触发 (event-driven) — online: after each test task judged successful by the evaluator, trigger workflow induction and memory update; offline: batch induction from all training examples of a website before inference. Snowball/curriculum-like effect builds increasingly complex workflows on top of earlier ones.",
+  "library_structure": "扁平 (flat) — workflows stored as separate text segments in a flat workflow memory, grouped/segmented per website; each website maintains a small relevant collection of workflows. (No hierarchical/vector/graph structure; pure text blocks.)",
+  "retrieval_method": "工作流匹配 / in-context augmentation — workflows grouped by website; all induced workflows for the relevant website are integrated into the agent prompt context (M + W) to guide generation. Agent learns to selectively follow or diverge from workflow guidelines. (No semantic vector retrieval; website-level grouping + full injection into context.)",
+  "validation": "执行验证 (execution-based) on WebArena via functional correctness check; LLM-judge gating for online (LM-based evaluator module judges task success before inducing a workflow). Mind2Web uses element/action accuracy. Online induction is gated by evaluator success label (validation gating).",
+  "error_correction": "[uncertain] Limited explicit error correction — agent learns to diverge from workflow guidelines when the workflow does not match the current state; online can still induce incorrect workflows from imperfect predictions, degrading performance. Relies on evaluator gating to filter bad trajectories rather than revising workflows. No rollback/bounded-edit mechanism.",
+  "test_env": "Web (web navigation) — WebArena (812 tasks, 5 websites: e-commerce/CMS/Reddit/GitLab/Maps) and Mind2Web (1000+ tasks, 200+ domains; cross-task/cross-website/cross-domain splits).",
+  "backbone_model": "GPT-4 (gpt-4-0613) primarily; also GPT-3.5-turbo. Temperature 0.0. Same LM used for workflow induction and action generation.",
+  "where_deploy": "general (general-purpose web/GUI navigation agent; demonstrated across diverse domains: travel, shopping, social media, content management, dev collaboration, maps).",
+  "metrics": "success_rate (task & step success rate), generalization (cross-task/cross-website/cross-domain), cost (avg number of steps per task), element accuracy, action F1, sample efficiency (learning curve over # examples).",
+  "key_results": "WebArena: 35.5% success rate, +12.0 absolute / +51.1% relative over BrowserGym baseline (23.5%); outperforms SteP (human expert workflows) by +7.6% relative; SOTA 35.6%; ~2 fewer steps/task, ~40.8 fewer steps than AutoEval. Mind2Web: +24.6% relative step success; offline AWM_4 step SR 45.1 vs MindAct 36.2. Online AWM generalizes +8.9–14.0 absolute step-SR points in cross-task/website/domain, with margins widening as train-test distribution gap widens. Learns from only ~40 examples (fast sample efficiency).",
+  "limitations": "transferability (online induces incorrect workflows from imperfect self-predictions, which can degrade performance; workflows are domain/website-specific) / scalability (prompt context grows as workflow memory accumulates, raising context-length cost) / workflow guidance can bias element selection (slightly lower action F1 vs MindAct; agent struggles to identify when to diverge from workflows) / online quality bounded by trajectory and evaluator accuracy.",
+  "uncertain": [
+    "error_correction"
+  ]
+}

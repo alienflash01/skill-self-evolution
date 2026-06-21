@@ -1,0 +1,5 @@
+# Windows artifact
+nul
+
+# Nested git repo (separate project clone, would be a broken submodule without .gitmodules)
+backup/deep-research-skills/

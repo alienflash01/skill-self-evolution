@@ -1,0 +1,212 @@
+# 字段定义：以 SKILL.md 为载体的 skill 自进化研究
+# 字段框架融合系统综述《A Survey of Self-Evolving Agents》(arXiv:2507.21046) 的
+# What/When/How/Where 分类法，并新增「SKILL.md 专属维度」
+# detail_level: brief(概要) -> moderate(中等) -> detailed(详尽)
+
+field_categories:
+  # 1. 基础信息
+  - category: 基础信息
+    fields:
+      - name: name
+        description: 方法/项目名称
+        detail_level: brief
+      - name: institution
+        description: 提出机构/团队
+        detail_level: brief
+      - name: release_date
+        description: 发布时间（论文发表或项目发布）
+        detail_level: brief
+      - name: paper_link
+        description: 论文/arXiv 链接（工程项目可能无）
+        detail_level: brief
+      - name: code_link
+        description: 代码/项目仓库链接（若有）
+        detail_level: brief
+      - name: type
+        description: 类型：academic(学术论文) / industry(工业产品/开源框架) / blog_practice(博客/实践)
+        detail_level: brief
+
+  # 2. 进化对象 (What to evolve) —— 进化的载体
+  - category: 进化对象_What
+    description: 自进化的载体落在何处（参考综述 §3 四支柱）
+    fields:
+      - name: what_evolved
+        description: >
+          进化对象。取值：Model权重 / Context记忆与提示 / Tools技能 / Architecture(单/多智能体)
+        detail_level: moderate
+      - name: skill_as_artifact
+        description: 技能是否作为独立可复用制品存在（是/否，及其形态：SKILL.md 文件/技能包/记忆条目/代码）
+        detail_level: moderate
+      - name: skill_as_doc
+        description: >
+          技能是否以「可读指令文档」为核心载体（是/否/混合）。本调研的判别核心字段：
+          是=主体为 markdown 指令；混合=指令+内嵌可执行代码；否=纯代码/纯向量
+        detail_level: moderate
+
+  # 3. 技能表示 (Skill Representation)
+  - category: 技能表示
+    description: skill 如何被编码与组织
+    fields:
+      - name: skill_encoding
+        description: >
+          编码方式：技能文档(.md/SKILL.md) / 自然语言SOP / docstring / 可执行代码 /
+          API / 向量嵌入 / 图谱 / 多文件技能包
+        detail_level: moderate
+      - name: skill_granularity
+        description: 粒度：原子动作 / 子任务workflow / 策略规则 / 见解(insight) / 完整技能包
+        detail_level: moderate
+
+  # 4. SKILL.md 专属维度（本调研新增）
+  - category: SKILL.md_专属维度
+    description: 文档形态技能自进化的关键工程维度
+    fields:
+      - name: doc_form
+        description: >
+          文档形态：纯指令 / 指令+内嵌代码块 / 结构化字段(YAML frontmatter+body) / 多文件包；
+          典型 token 长度
+        detail_level: detailed
+      - name: edit_granularity
+        description: >
+          编辑粒度：整文档重写 / 有界增删替换(add/delete/replace) / 最小 diff / PATCH /
+          bundle(技能+工具原子联合编辑) / 全新生成
+        detail_level: detailed
+      - name: version_gating
+        description: >
+          版本与门控机制：无 / 留出验证门控(held-out) / git 分支前沿选择 / Pareto 前沿 /
+          DAG 血脉版本化 / review-gated adopt(人工采纳) / staging+backup
+        detail_level: detailed
+      - name: doc_provenance
+        description: >
+          文档来源：人工初始化 / LLM 一次性生成 / 失败轨迹蒸馏 / 成功轨迹归纳 / 执行录像回放 /
+          session 经验提取 / 社区共享 / 离线 benchmark 训练
+        detail_level: moderate
+      - name: cross_transfer
+        description: 跨载体迁移：跨模型 / 跨 agent harness(Claude/Codex/Cursor) / 跨任务 / 跨用户/团队 / 跨基准
+        detail_level: moderate
+      - name: library_governance
+        description: >
+          技能库治理：库膨胀治理(Lotka-Volterra/退休/归档) / 去重合并 / 相似度检索编辑目标 /
+          灰尘清理(curator loop) / 层次化索引
+        detail_level: moderate
+      - name: failure_memory
+        description: >
+          失败记忆：是否维护 anti-pattern / 失败签名+归因+补救 / rejected-edit buffer 作为
+          负反馈，用于否决重复错误或避免有害编辑方向
+        detail_level: moderate
+      - name: safety_guardrails
+        description: >
+          编辑安全：scope 边界(仅 .md 不碰源码) / pre-edit 备份+回滚 / 防 eval-hacking /
+          确认门控 / 人工在环(human-in-the-loop) / 密钥与注入检查 / 有界编辑防破坏性重写
+        detail_level: detailed
+      - name: coevolution
+        description: >
+          协同进化：是否与工具/其他技能/验证器协同进化。取值：skill-only / skill-tool /
+          skill-skill 生态 / generator-verifier 协同 / skill-prompt 联合
+        detail_level: moderate
+
+  # 5. 自进化机制 (How to evolve) —— 方法范式
+  - category: 自进化机制_How
+    description: 用什么范式实现自进化（参考综述 §5）
+    fields:
+      - name: how_method
+        description: >
+          方法范式：reward-based(文本反馈/内部/外部/隐式奖励) / imitation_demonstration /
+          population_evolutionary(群体进化/遗传) / rollout_optimization(非梯度, 文本空间
+          优化) / co_evolutionary(协同进化) / gradient(SFT) / RL
+        detail_level: detailed
+      - name: learning_signal_source
+        description: 学习信号来源：环境奖励 / LLM-as-judge / 自我反思 / 成败轨迹 / 留出验证分 / 工具成功率指标
+        detail_level: moderate
+      - name: reward_granularity
+        description: 奖励粒度：process(过程) / outcome(结果) / hybrid(混合)
+        detail_level: brief
+      - name: learning_paradigm
+        description: 范式轴：online vs offline；on-policy vs off-policy；sleep-time(离线睡眠期)
+        detail_level: brief
+
+  # 6. 进化时机 (When to evolve)
+  - category: 进化时机_When
+    description: 何时触发进化（参考综述 §4）
+    fields:
+      - name: when_evolve
+        description: >
+          时机：intra-test-time(任务执行中在线) / inter-test-time(任务间离线或在线流式) /
+          sleep-time(夜间/空闲离线 replay)
+        detail_level: moderate
+      - name: trigger
+        description: 触发方式：事件触发(任务后/失败后) / 周期性(cron/launchd/epoch) / 失败触发 /
+          curriculum(课程)驱动 / 工具退化触发 / 使用驱动
+        detail_level: moderate
+
+  # 7. 技能存储与检索 (Storage & Retrieval)
+  - category: 存储与检索
+    description: skill library 的结构与复用方式
+    fields:
+      - name: library_structure
+        description: 库结构：扁平 / 层次化 / 向量库 / 技能文件目录 / git 分支 / 图谱 / DAG 血脉 / 云端注册中心
+        detail_level: moderate
+      - name: retrieval_method
+        description: 检索/复用方式：语义相似度 / 代码直接复用 / 生成即检索(generation-as-retrieval) /
+          工作流匹配 / BM25+embedding+LLM 重排 / description 匹配触发加载
+        detail_level: moderate
+
+  # 8. 验证与反馈 (Validation & Feedback)
+  - category: 验证与反馈
+    description: 如何保证技能质量与纠错
+    fields:
+      - name: validation
+        description: 验证方式：执行验证(execution-based) / LLM-judge / surrogate verifier(无gt) /
+          留出评估 / validation gating(门控) / 多模型辩论 / 功能正确性检查
+        detail_level: moderate
+      - name: error_correction
+        description: 错误纠正：自我修订(self-revision) / 回滚 / 有界编辑(bounded edits) /
+          定向 diff 修补 / 重规划
+        detail_level: moderate
+
+  # 9. 环境与基座 (Environment & Backbone)
+  - category: 环境与基座
+    fields:
+      - name: test_env
+        description: 测试环境：Minecraft / Web / GUI / coding / tool-call / 通用 / SkillsBench / GDPVal / 真实生产力任务
+        detail_level: brief
+      - name: backbone_model
+        description: 底座模型：GPT / Claude / 开源LLM(Qwen/Llama) / VLM；是否 optimizer/target 分离
+        detail_level: brief
+      - name: where_deploy
+        description: 部署域（参考综述 §6 Where）：general(通用) / specialized(coding/GUI/办公/文档 等专用域)
+        detail_level: brief
+
+  # 10. 评估指标 (Evaluation Metrics)
+  - category: 评估指标
+    fields:
+      - name: metrics
+        description: 评估方法：success_rate(成功率) / generalization(新任务/跨模型泛化) /
+          sample_efficiency(样本效率) / skill_library_growth(技能库增长) / cost(成本) /
+          经济价值捕获 / 回归率
+        detail_level: moderate
+      - name: key_results
+        description: 关键实验结论/提升幅度
+        detail_level: moderate
+
+  # 11. 局限与挑战 (Limitations & Challenges)
+  - category: 局限与挑战
+    fields:
+      - name: limitations
+        description: 局限：scalability(可扩展性) / catastrophic_forgetting(灾难性遗忘) /
+          transferability(迁移性) / eval-hacking(评估作弊) / controllability(可控制性) /
+          doc_bloat(文档膨胀) / optimizer_quality(依赖强 optimizer) / regression_risk(回归风险)
+        detail_level: moderate
+
+  # 12. 可借鉴要点（本调研新增，供落地参考）
+  - category: 可借鉴要点
+    fields:
+      - name: takeaways
+        description: 对「让一个 agent 自进化其 SKILL.md」最值得借鉴的 1-3 个设计要点（直接可落地的工程思想）
+        detail_level: detailed
+
+# 不确定字段（深度调研阶段自动填充）
+uncertain:
+  - paper_link   # 工程实践/博客类项目可能无正式论文
+  - key_results  # 需深入阅读论文/报告获取
+  - code_link    # 部分方法未开源
+  - institution  # 部分社区项目作者归属模糊

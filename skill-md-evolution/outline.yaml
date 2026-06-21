@@ -1,0 +1,234 @@
+topic: "AI agent 中以 SKILL.md（技能指令文档）为载体的 skill 自进化方法"
+topic_slug: skill-md-evolution
+description: >
+  调研 AI agent 中「技能以 markdown 指令文档（SKILL.md / CLAUDE.md / AGENTS.md）
+  形式承载」时的自进化方法。区别于代码技能库（Voyager）或纯向量记忆，本调研聚焦：
+  技能是一份可读、可审查的指令文档，agent 在运行中自动改写/扩充该文档以持续进化。
+  覆盖学术框架（SkillOpt/SkillSmith/CoEvoSkills 等）、工程实践（OpenSpace/AutoSkill/
+  claude-self-improving-skills 等）、思想来源（TextGrad/GEPA/OPRO/ExpeL 等）三大类。
+  字段框架融合系统综述《A Survey of Self-Evolving Agents》(arXiv:2507.21046) 的
+  What/When/How/Where 分类法，并新增 SKILL.md 专属维度。
+
+items:
+  # === A. 核心组｜学术框架：直接以 SKILL.md / 技能文档为进化载体 ===
+  - id: skillopt
+    name: SkillOpt
+    category: academic_doc_skill
+    note: >
+      Microsoft, 2026。把 SKILL.md 当作冻结 agent 的「可训练外部状态」，用镜像 SGD 的
+      文本空间优化：rollout(前向)→反思(反向)→有界 add/delete/replace 编辑(受 textual
+      learning-rate 预算约束)→留出验证门控(仅当严格提升才接受)。rejected-edit buffer +
+      epoch-wise slow/meta update 保持稳定。产出 best_skill.md(300-2k tokens)，部署零
+      推理调用。52 个评测单元格全 best/tied。arXiv:2605.23904; github microsoft/SkillOpt
+
+  - id: skillopt_sleep
+    name: SkillOpt-Sleep
+    category: academic_doc_skill
+    note: >
+      Microsoft, 2026。SkillOpt 的部署期「睡眠」伴侣。夜间离线收割 ~/.claude session→
+      挖掘反复出现的任务→offline replay→reflect→有界编辑→held-out gate→staged
+      proposal→(用户) adopt。融合 SkillOpt + Claude Dreams + agent sleep 三思想。
+      作用于 CLAUDE.md / SKILL.md。强 optimizer + 弱 target 架构。github microsoft/
+      SkillOpt/plugins/claude-code; docs/sleep/FINAL_REPORT.md
+
+  - id: skillsmith
+    name: SkillSmith
+    category: academic_doc_skill
+    note: >
+      2026。Synergy-aware Skill-Tool 协同进化框架。三大创新：(1) bundle 化的 skill-tool
+      联合编辑(原子提案，工具可 wrap/edit/compose/split/retire)；(2) 受 Lotka-Volterra
+      生态动力学启发的技能交互矩阵，建模技能间互补/冲突，指导检索/变异优先级/退休，治理
+      库膨胀；(3) anti-pattern memory 记录失败签名+归因+补救，否决重复错误。arXiv:
+      2606.01314; themoonlight.io review
+
+  - id: coevoskills
+    name: CoEvoSkills (EvoSkills)
+    category: academic_doc_skill
+    note: >
+      2026。Generator-Verifier 协同进化验证框架，让 agent 自主构建复杂多文件 skill 包，
+      无需 ground truth。Skill Generator 迭代精炼 skill；信息隔离的 Surrogate Verifier
+      独立进化测试断言，提供密集可执行反馈，规避自我验证的确认偏差。SkillsBench 上 Claude
+      Code/Codex 双 SOTA，跨 6 个 LLM 迁移。arXiv:2604.01687; github Zhang-Henry/
+      CoEvoSkills; evoskills.net
+
+  - id: evoskill
+    name: EvoSkill
+    category: academic_doc_skill
+    note: >
+      Sentient Labs + Virginia Tech, 2026。将 GEPA 的单文件提示优化扩展为「技能(.md)+系统
+      提示词」联合变异，每次迭代生成新 agent 程序。五阶段：base agent 跑当前程序→proposer
+      分析失败轨迹→generator 写新 skill 文件/重写系统提示→evaluator 在留出集打分→Pareto
+      前沿保留 top-N 为 git 分支。.claude/skills/ + .claude/program.yaml，跨 agent/模型
+      迁移。arXiv:2603.02766; github sentient-agi/EvoSkill
+
+  - id: draft
+    name: DRAFT (From Exploration to Mastery)
+    category: academic_doc_skill
+    note: >
+      RUC + Baidu, ICLR 2025 Oral(前1.8%)。迭代精炼工具 docstring(结构化 NL 文档：
+      description/parameters)。三角色循环：Explorer 生成多样尝试→Analyzer(LLM-as-judge)
+      做信用分配归因到具体文档缺陷→Rewriter 更新 docstring。含探索多样性约束 + 基于 BLEU/
+      余弦相似度的工具自适应终止。本质即「文档形态技能」的进化。arXiv:2410.08197;
+      github quchangle1/DRAFT
+
+  - id: skillweaver
+    name: SkillWeaver
+    category: academic_doc_skill
+    note: >
+      OSU/UVA/Purdue/CMU/Cisco, 2025。技能 = Python 函数 + 自然语言 docstring(含描述+先前
+      执行日志+前置条件)。三阶段：技能提议(LLM 自动课程)→合成(成功轨迹蒸馏为 API)→打磨
+      (自动测试+环境反馈)。运行时 --allow-recovery 用定向 diff 修补 API。docstring 侧即文档
+      技能进化。arXiv:2504.07079; github OSU-NLP-Group/SkillWeaver
+
+  # === B. 工程实践组｜SKILL.md / CLAUDE.md 自改进 agent ===
+  - id: openspace
+    name: OpenSpace
+    category: engineering_practice
+    note: >
+      HKUDS, 2026。开源自进化技能引擎。对执行录像做事后分析，产出 FIX/DERIVED/CAPTURED
+      最小 diff 编辑 SKILL.md；SQLite DAG 版本化(完整血缘+diff)；质量监控(技能应用率/
+      完成率/回退率/工具成功率)；BM25+embedding+LLM skill_ranker 检索；工具退化触发上游
+      依赖技能的级联进化；云端 open-space.cloud 协作共享。GDPVal 上价值捕获 72.8%(4.2x
+      ClawWork)。github HKUDS/OpenSpace
+
+  - id: autoskill
+    name: AutoSkill / SkillEvo
+    category: engineering_practice
+    note: >
+      ECNU-ICALK, 2026。Experience-driven Lifelong Learning(ELL)实践。从真实交互经验
+      (对话+agent 轨迹)自动创建可复用 Skill(SKILL.md 格式)，通过 merge+版本更新持续进化。
+      Local Skill Manager 做 reusable-experience triage→相似技能检索→discard/improve/
+      merge/create 决策。SkillEvo = replay/evaluation/mutation/promotion 框架。版本语义
+      化(v0.1.0→v0.1.1)。github ECNU-ICALK/AutoSkill
+
+  - id: claude_self_improving_skills
+    name: claude-self-improving-skills
+    category: engineering_practice
+    note: >
+      UniM0cha, 2026。Hermes Agent 风格的 Claude Code 自改进。专用 distiller subagent 从
+      工作流经验蒸馏为 SKILL.md(遵循 Anthropic skill-creator 指引)。偏好 patch 现有技能→
+      伞形技能→加参考文件，仅最后才新建类级技能。编辑安全：pre-edit 备份+post-edit 验证+
+      provenance stamping+malformed 自动回滚。Curator loop：30天 stale 归档，use_count>=3
+      半速老化。团队 git 共享。github UniM0cha/claude-self-improving-skills
+
+  - id: claude_evolving_skills
+    name: claude-evolving-skills (reflect-and-learn)
+    category: engineering_practice
+    note: >
+      PalmDr, 2026。让 Claude Code 自我改进：automated scouting + 多模型辩论(Claude+Gemini+
+      Codex)+reflection。reflect-and-learn 是核心自改进循环：复盘过往 session→双通道打分→
+      多模型辩论→memory consolidation→experience stripping→tool co-evolution detection→
+      evolution tree 追踪。agentic-radar/vendor-docs-radar 扫描社区与官方文档。launchd/cron
+      周期调度。github PalmDr/claude-evolving-skills
+
+  - id: homunculus
+    name: Homunculus nightly agent (/hm-night)
+    category: engineering_practice
+    note: >
+      JavanC, 2026。夜间自主 agent：instinct harvest→将本能路由到最佳机制(hook/rule/skill/
+      script/agent)→skill eval(仅变更项)→health check。Evolution Tiers(Minimal/Standard/
+      Full)控制深度与预算(~$0.5~$10/night)。周日深度模式。阶段管线 P1进化/P2研究/P3实验/
+      P4同步。核心行为变更需用户批准。产出 morning report + Suggested actions。github
+      JavanC/Homunculus
+
+  - id: skill_evolver
+    name: Skill Evolver (nomadically.work)
+    category: engineering_practice
+    note: >
+      Vadim, 2026。六 agent 自改进 pipeline 的第三个 agent，专责编辑指令文件：CAN edit
+      .claude/skills/*/SKILL.md, .claude/commands/*.md, .claude/hooks/*.py, CLAUDE.md,
+      memory files；不能碰应用源码(爆炸半径限制)。基于 JSON 失败报告做 evidence-based
+      编辑，强制 Verification Gate。自问机制：是否有更简修复(如 CLAUDE.md 加一行)。
+      vadim.blog/skill-evolver-research-to-practice
+
+  - id: venotyh_evoskill
+    name: venotyh/evoskill (evolutionary skill agent)
+    category: engineering_practice
+    note: >
+      2026。把 AI agent skill 当作可进化 genome。idle/sleep 期跑世代进化：select 最优→
+      mutate(prompt/instructions/tools/parameters，含 guided55%/random25%/crossover20%)→
+      evaluate fitness(LLM-as-judge 80%+结构分 20%)→prune。Lineage DAG 渲染继承树。
+      sandbox 执行。cli: evolve/sleep/lineage。github venotyh/evoskill
+
+  # === C. 思想来源组｜文本空间优化范式 ===
+  - id: textgrad
+    name: TextGrad
+    category: idea_text_opt
+    note: >
+      Stanford, Nature 2025(arXiv:2406.07496)。用 LLM 文本反馈做「自动微分」：把复合 AI
+      系统建模为计算图，对任意变量(prompt/code/分子/方案)反传 textual gradient 进行优化。
+      PyTorch 风格 API。GPQA 51%→55%，LeetCode-Hard +20%。是 SkillOpt「reflection=backward
+      pass」隐喻的直接理论母体。github zou-group/textgrad
+
+  - id: gepa
+    name: GEPA
+    category: idea_text_opt
+    note: >
+      Agrawal et al., 2025。Reflective textual evolution 的 Genetic-Pareto 优化器：反射→
+      精炼模式，从发展集选候选系统并优化 prompt。证明比标量奖励 RL 更样本高效；Pareto 前沿
+      选择保留多样候选，比 TextGrad 贪心爬山收敛更快。是 EvoSkill/SkillSmith 的直接母体。
+      openreview RQm2KQTM5r
+
+  - id: opro
+    name: OPRO / PromptBreeder / EvoPrompt
+    category: idea_text_opt
+    note: >
+      LLM-as-optimizer 三部曲。OPRO(Yang, Google, ICLR 2024)：LLM 用自然语言描述+评分
+      迭代优化 prompt。PromptBreeder(Meta)：prompt 作为可进化种群，用 mutation operators
+      自我进化「进化策略」。EvoPrompt：遗传算法/DE 思想演化 prompt。共同点：把 prompt/
+      指令当作可进化文本基因，是 SKILL.md 自进化的早期范式。
+
+  # === D. 思想来源组｜经验/记忆蒸馏为文档 ===
+  - id: expel
+    name: ExpeL
+    category: idea_distill
+    note: >
+      THU LeapLab, AAAI 2024(arXiv:2308.10144)。从成败轨迹蒸馏可复用 NL 见解/规则，带
+      重要性计数(ADD/UPVOTE/DOWNVOTE/EDIT，降至0裁剪)；成功轨迹存 Faiss 向量库做 RAG。
+      思想可迁移到 SKILL.md 的「见解沉淀+裁剪治理」。github LeapLabTHU/ExpeL
+
+  - id: awm
+    name: Agent Workflow Memory (AWM)
+    category: idea_distill
+    note: >
+      CMU+MIT, ICML 2025(arXiv:2409.07429)。归纳模块从经验轨迹提取通用子例程(workflow)
+      文本块，抽象掉示例特有上下文，注入提示记忆。在线(流式测试从成功轨迹归纳)+离线两种。
+      仅~40 示例即见效。思想≈「把验证过的行动链固化为可复用文档」。github zorazrw/
+      agent-workflow-memory
+
+  - id: muse
+    name: MUSE (Learning on the job)
+    category: idea_distill
+    note: >
+      2025(arXiv:2510.08002)。层次化记忆 M={战略洞见, 过程层 SOP 文档(≈过程型 SKILL.md),
+      工具层动态指令}。Plan-Execute-Reflect-Memorize 循环。仅~10% 任务即累积记忆。SOP 文档
+      形态与 SKILL.md 高度同构。github KnowledgeXLab/MUSE
+
+  - id: reflexion
+    name: Reflexion / Self-Refine
+    category: idea_distill
+    note: >
+      Reflexion(Northeastern/Princeton/MIT, NeurIPS 2023, arXiv:2303.11366)：verbal RL，
+      把稀疏奖励放大为 NL 反思存入情景记忆滑窗。Self-Refine(CMU/AllenAI, arXiv:2303.17651)：
+      同一 LLM 的 FEEDBACK→REFINE 任务内循环。两者是「反思驱动自改进」的根源范式，区别在无
+      持久库(任务内临时技能)。
+
+  # === E. 对照组｜非文档载体（用于论证「为何选 SKILL.md」）===
+  - id: voyager
+    name: Voyager (对照)
+    category: contrast
+    note: >
+      NVIDIA/Caltech/UT Austin/Stanford, 2023(arXiv:2305.16291)。技能=可执行 JavaScript 代码
+      (非文档)，向量嵌入检索，自动课程+迭代提示+自我验证门控。作为「代码技能库」对照项，
+      论证文档载体(SKILL.md)在可读性/可审查性/可迁移性上的差异。github MineDojo/Voyager
+
+execution:
+  batch_size: 5            # 并行 agent 数量
+  items_per_agent: 1       # 每个 agent 处理的项数（专研 1 项）
+  output_dir: ./results    # 结果输出目录（相对此目录）
+
+# 后续命令：
+#   /research-add-items   补充对象
+#   /research-add-fields  补充字段
+#   /research-deep        启动深度调研（按 batch_size 并行）
+#   /research-report      汇总为 markdown 报告

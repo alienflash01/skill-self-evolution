@@ -1,0 +1,98 @@
+topic: "AI agent 中 skill（技能）自进化的实现方法"
+topic_slug: skill-self-evolution
+description: >
+  调研 AI agent 中技能（skill）自进化的实现方法，聚焦"技能库自动构建与进化"
+  和"经验/记忆/反思驱动"两大类。字段框架融合系统综述（A Survey of
+  Self-Evolving Agents, arXiv:2507.21046）的 What/When/How/Where 分类法。
+
+# 聚焦范围：技能库 (Skill Library) + 经验/记忆/反思 (Experience/Memory/Reflection)
+items:
+  # --- A. 技能库自动构建与进化 (Skill Library Auto-Building) ---
+  - id: voyager
+    name: Voyager
+    category: skill_library
+    note: Minecraft agent，通过 automatic curriculum + iterative prompting 持续构建可复用代码技能库
+
+  - id: jarvis_1
+    name: JARVIS-1
+    category: skill_library
+    note: 开放世界 agent，基于多模态记忆的技能计划与进化
+
+  - id: gitm
+    name: GITM (Ghost in the Minecraft)
+    category: skill_library
+    note: 知识图谱驱动的 Minecraft agent，技能以文本知识形式积累
+
+  - id: skillweaver
+    name: SkillWeaver
+    category: skill_library
+    note: 分析成功轨迹，合成与精炼可复用 skill API（综述 §3.3）
+
+  - id: skillopt
+    name: SkillOpt
+    category: skill_library
+    note: Microsoft，文本空间技能优化器；技能文档作为可训练外部状态，rollout+reflection+validation gating
+
+  # --- B. 经验/记忆/反思驱动 (Experience/Memory/Reflection) ---
+  - id: reflexion
+    name: Reflexion
+    category: experience_reflection
+    note: 基于自我反思（verbal reinforcement）的能力迭代
+
+  - id: expel
+    name: ExpeL
+    category: experience_reflection
+    note: 从经验中蒸馏可复用见解/规则
+
+  - id: self_refine
+    name: Self-Refine
+    category: experience_reflection
+    note: 自我迭代优化输出
+
+  - id: agent_workflow_memory
+    name: Agent Workflow Memory
+    category: experience_reflection
+    note: 记录可复用子任务序列（workflow），检索已验证行动链代替重规划（综述 §3.2.1）
+
+  - id: reasoningbank
+    name: ReasoningBank
+    category: experience_reflection
+    note: 从成败中蒸馏可泛化推理策略到结构化记忆 + memory-aware test-time scaling（综述 §3.2.1）
+
+  - id: muse
+    name: MUSE (Learning on the job)
+    category: experience_reflection
+    note: 层次化记忆（战略/程序/工具）+ Plan-Execute-Reflect-Memorize 循环（综述 §3.2.1）
+
+  # --- C. 技能/工具掌握与精炼 (Tool/Skill Mastery) ---
+  - id: toolmem
+    name: ToolMem
+    category: skill_mastery
+    note: 存储每个工具/技能的优缺点于记忆，用于更好选择（综述 §3.3）
+
+  - id: draft
+    name: DRAFT (From Exploration to Mastery)
+    category: skill_mastery
+    note: 迭代自纠正循环掌握/调试/精炼工具（credit-assignment + docstring refinement）（综述 §3.3）
+
+  # --- D. 工程级自进化框架 (Engineering/Product Frameworks) ---
+  - id: evoskill
+    name: EvoSkill
+    category: engineering
+    note: 开源 agent 自改进工具，扩展 GEPA 从单文件优化到完整 agent 进化
+
+  - id: openspace
+    name: OpenSpace
+    category: engineering
+    note: HKUDS 自进化技能引擎，捕获与复用模式
+
+execution:
+  batch_size: 5            # 并行 agent 数量
+  items_per_agent: 1       # 每个 agent 处理的项数（专研 1 项）
+  output_dir: ./results    # 结果输出目录（相对此目录）
+
+# 后续命令：
+#   /research-add-items   补充对象
+#   /research-add-fields  补充字段
+#   /research-deep        启动深度调研（按 batch_size 并行）
+#   /research-report      汇总为 markdown 报告

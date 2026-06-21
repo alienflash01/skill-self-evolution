@@ -1,0 +1,31 @@
+{
+  "name": "GITM (Ghost in the Minecraft)",
+  "institution": "Shanghai AI Lab (OpenGVLab) / Tsinghua University",
+  "release_date": "2023-05-25",
+  "paper_link": "https://arxiv.org/abs/2305.17144",
+  "code_link": "https://github.com/OpenGVLab/GITM",
+  "type": "academic",
+  "what_evolved": "Context memory & prompts (text-based knowledge and memory); LLM weights are frozen (GPT used via API). Evolves a text memory of accumulated successful action-list summaries + a text knowledge base from Minecraft wikis/recipes.",
+  "skill_as_artifact": "Yes. Successful plans are recorded and summarized as reusable text-based memory entries ('common solutions') that serve as reference for future planning.",
+  "skill_encoding": "Natural language (text-based knowledge from Minecraft Wiki/recipes; text summaries of successful structured-action sequences). Not a formal graph, despite 'knowledge graph' phrasing.",
+  "skill_granularity": "Sub-task workflow: LLM Decomposer breaks goals into a sub-goal tree; LLM Planner produces sequences of structured actions (explore/approach/mine/equip/smelt...) for each sub-goal.",
+  "how_method": "No gradient/RL model training. Frozen GPT via API. Learns by recording & summarizing successful action lists into text memory as reusable references (self-generated successful-trajectory demonstrations / in-context exemplars). Closest to imitation_demonstration from own successful rollouts + in-context memory reuse.",
+  "learning_signal_source": "Success/failure trajectories: LLM Interface returns execution feedback (success/failure + inventory changes); only successful plans are summarized and stored.",
+  "reward_granularity": "Hybrid: per-action execution feedback (success/failure, inventory deltas) plus sub-goal outcome (goal achieved or not).",
+  "learning_paradigm": "Online, on-policy (agent generates its own plans/trajectories and accumulates memory during live task execution).",
+  "when_evolve": "Intra-test-time (online during task execution), with memory carrying over across sub-goals/attempts to enhance future planning.",
+  "trigger": "Event-triggered: success events store/summarize a plan into memory; failure events trigger plan revision by the LLM Planner.",
+  "library_structure": "Text-based: (1) a static text knowledge base sourced from Minecraft Wiki and in-game recipes; (2) a flat, growing text memory of summarized successful action lists.",
+  "retrieval_method": "LLM is fed relevant text knowledge/memory as reference context for planning (generation-as-retrieval / semantic context selection). [uncertain: exact retrieval/ranking mechanism not detailed in paper]",
+  "validation": "Execution-based: the LLM Interface verifies each structured action against real environment observations (success/failure, inventory state).",
+  "error_correction": "Self-revision: execution failures are fed back to the LLM Planner, which iteratively corrects/refines the action plan.",
+  "test_env": "Minecraft (open-world, long-horizon crafting/survival tasks, ObtainDiamond benchmark, full Overworld technology tree).",
+  "backbone_model": "GPT-3.5 (text-davinci) for LLM Decomposer and LLM Planner; LLM Interface uses hardcoded keyboard/mouse scripts.",
+  "where_deploy": "Specialized (Minecraft / open-world game agent).",
+  "metrics": "success_rate (ObtainDiamond), generalization (full technology-tree coverage), sample_efficiency / training cost (CPU vs GPU days), skill_library_growth (learning curve from text-memory accumulation).",
+  "key_results": "67.5% ObtainDiamond success rate (+47.5% over OpenAI VPT SOTA of 20%); first agent to obtain all 262 Overworld items (100% tech tree vs 30% for all prior methods combined); ~10,000x more efficient (2 days on a 32-core CPU, no GPU) vs 6,480 GPU-days (VPT) and 17 GPU-days (DreamerV3).",
+  "limitations": "transferability (Minecraft-specific text knowledge and hardcoded low-level interface scripts); scalability (depends on LLM reasoning quality and API cost; structured action set is hand-designed); limited to text-based observations rather than raw pixels.",
+  "uncertain": [
+    "retrieval_method"
+  ]
+}

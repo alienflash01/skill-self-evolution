@@ -1,0 +1,39 @@
+{
+  "name": "Voyager",
+  "institution": "NVIDIA / Caltech / UT Austin / Stanford / ASU (MineDojo 团队；作者: Guanzhi Wang, Yuqi Xie, Yunfan Jiang, Ajay Mandlekar, Chaowei Xiao, Yuke Zhu, Linxi \"Jim\" Fan, Anima Anandkumar)",
+  "release_date": "2023-05-25 (arXiv v1)",
+  "paper_link": "https://arxiv.org/abs/2305.16291",
+  "code_link": "https://github.com/MineDojo/Voyager",
+  "type": "学术 (同行评审论文，arXiv 预印本；MIT 许可证开源代码)",
+
+  "what_evolved": "工具/技能 (skill library) + 上下文记忆与提示。一个不断增长的、可执行代码形式的技能库是进化的载体；模型权重不被进化（GPT-4 作为黑盒使用，无微调）。简单技能的组合随时间复合出更强的能力。",
+  "skill_as_artifact": "是。每个技能都是一个独立可复用的制品 (artifact)：一个自包含的可执行代码程序加一段自然语言描述，经过验证后被提交到持久化技能库（以文件夹形式存储），以便在类似情境下被检索或组合使用。",
+
+  "skill_encoding": "可执行代码（面向 Mineflayer 机器人 API 的 JavaScript 程序，并用 Voyager 工具函数封装），每段代码都配有一条自然语言描述。选择代码作为动作空间，是为了表达时间上延续的、可组合的行为。技能以描述文本的嵌入向量作为索引。",
+  "skill_granularity": "子任务工作流 (sub-task programs)。每个技能完成一个时间上延续的子任务（例如「合成木镐」、「猎杀僵尸」）；复杂技能通过组合更简单的程序合成而来。",
+
+  "how_method": "基于奖励 (reward-based，将环境/执行反馈作为文本奖励) + rollout 优化 (rollout_optimization，通过迭代提示进行文本/代码空间优化，非梯度方法)。迭代提示机制结合环境反馈、执行错误和自我验证来改进程序；不使用任何基于梯度的训练或参数访问。",
+  "learning_signal_source": "环境反馈 (环境执行反馈 + 执行错误) + 自我反思 (GPT-4 自我验证作为评判者) + 成败轨迹 (执行成功/失败)。学习完全通过黑盒 GPT-4 查询在上下文 (in-context) 中进行。",
+  "reward_granularity": "混合 (代码迭代期间的过程级执行错误反馈 + 任务达成情况的结果级自我验证)",
+  "learning_paradigm": "在线 (online)；通过黑盒 LLM 进行上下文内的终身学习 (in-context lifelong learning，无参数训练，故 on/off-policy 不适用)。在单次终身运行过程中持续积累技能，并支持检查点/断点续跑。",
+
+  "when_evolve": "测试期内 (intra-test-time，在线，在任务执行过程中)。Voyager 进行持续的终身学习，在一个开放式会话中边游玩边逐步获取/存储技能。",
+  "trigger": "课程驱动 (GPT-4 自动课程根据智能体状态 + 进度提出下一个探索任务，是一种上下文内的新颖性搜索 (novelty search)) + 失败触发的迭代提示 (在执行错误或自我验证失败时重新生成代码)。",
+
+  "library_structure": "向量库 + 技能文件。每个技能 = 一个文件夹，内含可执行代码 + 描述；技能通过其描述的向量嵌入进行索引以支持相似度检索。",
+  "retrieval_method": "语义相似度 (semantic similarity：嵌入技能描述，为新任务检索 top-5 相关技能) + 代码直接复用 (直接复用代码 / 组合更简单的程序)。该技能库还可作为即插即用资产，用于增强其他方法 (如 AutoGPT)。",
+
+  "validation": "基于执行 (在 Minecraft 中运行代码；观察环境反馈 + 执行错误) + LLM 评判/验证门控 (GPT-4 自我验证作为评判者确认任务是否达成；只有通过验证的技能才会被提交到技能库)。",
+  "error_correction": "自我修订 (self-revision：迭代提示利用错误信息或批评意见作为反馈，重新生成/编辑程序；在技能被接受或拒绝前进行有限多轮修正)。",
+
+  "test_env": "Minecraft (通过 Mineflayer Node.js 机器人 + Mineflayer-collectblock；连接到一个 Fabric 模组化的 Minecraft 1.19 实例)。",
+  "backbone_model": "GPT-4 (黑盒 API 查询，用于课程设计、代码生成和自我验证)；消融实验表明 GPT-4 在代码生成上远胜 GPT-3.5。",
+  "where_deploy": "专用 (specialized，Minecraft / 开放世界游戏环境)。",
+
+  "metrics": "技能库增长 (skill_library_growth，新发现的独特物品数；技能库规模)、泛化能力 (generalization，在新世界中零样本迁移到未见任务)、样本效率 (sample_efficiency，达到里程碑所需的提示迭代次数)、成功率 (success_rate，科技树工具层级、任务完成度)、探索能力 (exploration，独特物品数、移动地图距离、解锁的科技树里程碑)。",
+  "key_results": "相比此前 SOTA，获得 3.3 倍更多的独特物品 (160 次迭代内 63 件)，移动距离长 2.3 倍，并以最高 15.3 倍的速度解锁关键科技树里程碑 (木制 15.3 倍、石制 8.5 倍、铁制 6.4 倍；Voyager 是唯一解锁钻石层级的方法)。零样本：在新世界中可解决全部未见任务，而基线方法在 50 次迭代内一个都解决不了。技能库还以即插即用方式增强了 AutoGPT。消融实验：每个模块都很重要，且 GPT-4 >> GPT-3.5。",
+
+  "limitations": "可迁移性 (技能与 Minecraft 绑定于 JavaScript/Mineflayer，难以移植到其他游戏或真实机器人)、可扩展性 (依赖昂贵/缓慢的 GPT-4 API 调用)、可控性 (开放式新颖性搜索课程可能产出无用技能；无外部目标对齐)、评测欺骗风险 (eval-hacking：由生成代码的同一个 LLM 进行自我验证)。无模型参数层面学习，因此所有知识都处于上下文/情境中；灾难性遗忘得到缓解，但无法跨领域迁移。",
+
+  "uncertain": ["reward_granularity", "learning_paradigm"]
+}
