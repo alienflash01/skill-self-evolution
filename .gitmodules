@@ -1,0 +1,6 @@
+[submodule "SkillOpt"]
+	path = reference/SkillOpt
+	url = git@github.com:alienflash01/SkillOpt.git
+[submodule "claude-evolving-skills"]
+	path = reference/claude-evolving-skills
+	url = https://github.com/PalmDr/claude-evolving-skills.git
