@@ -1,0 +1,62 @@
+{
+  "name": "Skill Evolver (nomadically.work)",
+  "institution": "nomadically.work（作者：Vadim Nicolai，高级软件工程师）",
+  "release_date": "2026-02-25",
+  "paper_link": "[uncertain]（无独立论文；Skill Evolver 属于 blog_practice。该文章引用了 5 篇影响其设计的研究论文：Meta Context Engineering arXiv:2601.21557、EvoConfig arXiv:2601.16489、CASTER arXiv:2601.19793、REprompt arXiv:2601.16507、Autonomous Question Formation arXiv:2602.01556）",
+  "code_link": "[uncertain]（未链接公开仓库；实现内置于 nomadically.work 产品 pipeline 内部；使用 Claude Code harness，带 .claude/skills/、.claude/commands/、.claude/hooks/）",
+  "type": "blog_practice",
+
+  "what_evolved": "Context记忆与提示 — 仅优化 Markdown 指令制品：.claude/skills/*/SKILL.md、.claude/commands/*.md、.claude/hooks/*.py、CLAUDE.md、OPTIMIZATION-STRATEGY.md 以及 auto-memory 文件。明确不优化模型权重、不优化应用源码（由 Code Improver 负责）、不优化工具。",
+  "skill_as_artifact": "是。技能以独立可复用制品形式存在：SKILL.md 文件、command .md 文件、hook .py 文件、CLAUDE.md 与 memory 文件。为多文件技能包形式（.claude/skills/*/SKILL.md + 同级文件）。",
+  "skill_as_doc": "是。核心载体是人类可读的 Markdown 指令文档；agent 的全部可编辑面为 doc/prompt/memory 文件。",
+
+  "skill_encoding": "技能文档(.md/SKILL.md) 为主载体，外加 CLAUDE.md（全局指令）、.claude/commands/*.md（command 文档）、.claude/hooks/*.py（可执行 hook 代码，但被视为在范围内的指令制品）以及 auto-memory 文件。结构化 EVOLUTION 记录将提议的编辑编码为 JSON 对象。",
+  "skill_granularity": "策略规则 / insight — 编辑针对技能文件内的单条指令、澄清与规则；每条 EVOLUTION 针对一个特定失败模式（hallucination、wrong_tool、out_of_role）。",
+
+  "doc_form": "结构化字段 + Markdown 正文。可编辑制品为 Markdown 指令文件。提议的编辑被编码为结构化 EVOLUTION 对象，包含字段：id、target_file、trigger_patterns、trigger_findings、change_type（add_instruction|clarify_instruction|remove_instruction|...）、before（精确文本）、after（新文本）、rationale、expected_impact{dimensions, magnitude: small|medium|large, regression_risk: none|low|medium|high}。anti-pattern 内联记录在技能文件中。Token 长度未明确，但 instruction-bloat anti-pattern 暗示一个软性大小上限，超过该上限 agent 可能截断/跳过指令。",
+  "edit_granularity": "Minimal diff / 有界 add-delete-replace。Apply Changes 优先级：(1) minimal diff — 尽量少改动；(2) additive 优先于 destructive；(3) specific 优先于 general；(4) testable。编辑使用精确的 before/after 文本替换。每次运行硬性上限 5 次 evolution。每条编辑必须关联 trigger_patterns 或 trigger_findings（frequency >= 2 阈值继承自 Trajectory Miner）。除非有正当理由，否则不做整文档重写。",
+  "version_gating": "验证门控（留出 Verification Gate）+ rejected-edit 反馈循环。每条编辑都须通过强制的 Verification Gate，检查：coherence（修改后的技能文件是否仍内在自洽？）、跨技能冲突、CLAUDE.md 一致性以及 hook fail-open 保留。若被拒绝，Meta-Optimizer 记录该失败并调整未来优先级。未提及显式的 git-branch/Pareto/DAG 版本管理。",
+  "doc_provenance": "失败轨迹蒸馏 + session 经验提取。编辑基于证据，由 Trajectory Miner 在上游产出的 JSON 失败/模式报告（frequency >= 2 的失败签名）驱动。无 LLM 一次性生成、无离线 benchmark 训练；来源始终是经由 trigger_patterns/trigger_findings 关联的被挖掘失败轨迹。",
+  "cross_transfer": "[uncertain]（文章未讨论）。范围局限于单一 nomadically.work pipeline；技能由该 pipeline 内的多个 agent 共享（暗示同一 doc 面的跨 agent 复用），但跨模型 / 跨 harness / 跨团队迁移未被讨论。",
+  "library_governance": "灰尘清理（curator 式 anti-bloat）+ 冲突检测。显式由 5 个 anti-pattern 治理：(1) instruction bloat — 有时应简化而非新增，关注文件体积增长；(2) contradictory instructions — 写入前必须检查冲突；(3) over-specificity — frequency >= 2 阈值禁止一次性修补；(4) prompt-engineering theater — 避免 'IMPORTANT:'/'CRITICAL:' 滥用；(5) cargo cult — 不脱离上下文照搬研究模式。Verification Gate 执行跨技能检查。未提及 Lotka-Volterra/retirement/archive 或分层索引。",
+  "failure_memory": "是。强负反馈记忆。(a) 5 个文档化的 anti-pattern 充当 rejected-edit 方向否决；(b) 每条 EVOLUTION 必须引用 trigger_patterns/trigger_findings（失败签名 + 归因 + 补救）；(c) CASTER 式：仅在分数下降时行动（修复失败，从不优化已生效的部分）；(d) Meta-Optimizer 记录每条被 Gate 拒绝的 evolution，并在后续下调该编辑类的权重，形成 pipeline 级的 rejected-edit buffer。",
+  "safety_guardrails": "高度详尽 — 这是头条设计维度。范围边界（最重要的单一决策）：仅可编辑指令文件（.claude/skills/*/SKILL.md、.claude/commands/*.md、.claude/hooks/*.py、CLAUDE.md、OPTIMIZATION-STRATEGY.md、auto-memory）；不可编辑应用源码、schema 文件、config 文件、生成文件。理由：能同时修改自身指令与代码库的 agent 具有无界爆炸半径；限定在 Markdown 意味着最坏情况 = 一个糟糕的 prompt，会被 Verification Gate 拦截（EvoConfig 式受范围限定修改）。有界编辑：每次运行最多 5 次 evolution。证据门控：每条变更必须关联 trigger_patterns 或 trigger_findings；不允许「凭感觉的改进」。强制自我质询：任何编辑前（5 个问题，含「是否有更简单的修复，例如 CLAUDE.md 里一行？」）。anti-pattern 意识（上述 5 个 anti-pattern）。Verification Gate（coherence + 跨技能 + CLAUDE.md 一致性 + hook fail-open 保留）。每条编辑的回归风险评估（none|low|medium|high）。未提及显式的编辑前 git 备份/回滚，但有界范围 + Gate 起到同样的保护作用。",
+  "coevolution": "Generator-verifier 协同 + skill-prompt 联合。Skill Evolver 是 6 个 pipeline agent 中的第 3 个：Trajectory Miner（第 1 个）向其输入失败报告；它编辑指令文档；Verification Gate 校验；Meta-Optimizer（策略大脑）记录结果并调整优先级。它连同细粒度技能文件一并协同编辑全局 prompt（CLAUDE.md / OPTIMIZATION-STRATEGY.md），故 prompt 与技能联合进化。技能被所有下游 agent 消费，因此一次技能编辑隐式协同进化 agent 行为。",
+
+  "how_method": "rollout_optimization（非梯度、文本空间 prompt 编辑）+ reward-based（经负向文本反馈）。无 SFT/RL/gradients。结合 Meta Context Engineering 的 observe→diagnose→modify→observe 循环、CASTER 的负反馈收敛，以及 REprompt 的需求引导生成。优化完全发生在 Markdown 指令空间内。",
+  "learning_signal_source": "成败轨迹（来自 Trajectory Miner 的 JSON 失败报告）+ LLM-judge / 反思（强制自我质询）+ 验证信号（Verification Gate 的接受/拒绝由 Meta-Optimizer 记录）。expected_impact.dimensions 提供一个需求规约，用于对照实际分数变化核查。",
+  "reward_granularity": "outcome — 由任务级分数下降与离散失败模式频率触发；每次 evolution 针对一个特定失败模式，而非 step 级 process reward。",
+  "learning_paradigm": "Offline + inter-test-time（任务运行之间）。作为独立的 pipeline 阶段运行，消费先前挖掘的失败报告，而非 intra-task 在线。相对当前技能版本为 on-policy（编辑活动的指令集）。",
+
+  "when_evolve": "inter-test-time（任务运行之间，作为专用 pipeline 阶段）— 处理由前序 Trajectory Miner 阶段产出的失败报告并输入 Verification Gate。非 intra-test-time 在线编辑；非 sleep-time 批量回放（尽管它按每个 pipeline 周期定期运行）。",
+  "trigger": "事件触发 / 失败触发 + 使用驱动。仅在分数下降或 Trajectory Miner 暴露出 frequency >= 2 的失败模式时行动。每次运行最多 5 次 evolution。单次糟糕 session 不足以促成编辑（frequency 门控）。",
+
+  "library_structure": "技能文件目录 — 文件系统目录布局：.claude/skills/*/SKILL.md（每技能）、.claude/commands/*.md（command 文档）、.claude/hooks/*.py（hook）、CLAUDE.md（全局）、OPTIMIZATION-STRATEGY.md（策略）、auto-memory 文件。.claude/ 下扁平的按域目录；无向量库 / DAG / 云端注册中心。",
+  "retrieval_method": "[uncertain]（检索机制未明确描述）。推测为 description/contextual 匹配与直接文件加载 — agent 在任务时读取 CLAUDE.md + 相关 SKILL.md 文件。未提及 embedding/BM25/rerank 技术栈。",
+
+  "validation": "验证门控（留出 Verification Gate）+ LLM-judge 式 coherence 检查 + 功能正确性检查。Gate 执行：(1) coherence — 修改后的技能文件是否仍内在自洽？；(2) 跨技能检查 — 是否与其他技能冲突？；(3) 一致性检查 — CLAUDE.md 的改动是否一致？；(4) hook 校验 — hook 修改是否保留 fail-open 设计？此外对照实际分数变动核查 expected_impact.dimensions。被拒绝的 evolution 由 Meta-Optimizer 记录。",
+  "error_correction": "有界编辑（bounded edits，每次运行最多 5 次）+ 定向 diff 修补（精确 before/after 文本替换、minimal-diff 优先、additive 优先于 destructive）+ 经 Gate 拒绝的 pipeline 级回滚（Meta-Optimizer 下调失败编辑类的权重）。未提及文件级 git 回滚；纠正是预防性的（自我质询 + anti-pattern）且基于门控，而非事后回滚。",
+
+  "test_env": "真实生产力任务 — nomadically.work 产品（remote EU job classification，远程欧盟岗位分类）。晚于最初的通用 Skill Evolver：实现后来特化为一个目标驱动的「Classifier Tuner」，针对 remote EU job classification 中的假阴性（false-negative）削减。",
+  "backbone_model": "Claude（由 .claude/ harness、CLAUDE.md、.claude/skills 及 Claude Code 约定所暗示）。optimizer/target 分离：Skill Evolver（optimizer agent）编辑供其他 target agent 消费的指令文件；二者运行于同一 Claude backbone。未指定确切模型变体。",
+  "where_deploy": "specialized（job-posting 分类 / remote-EU-job 过滤领域，经 nomadically.work）。最初为 general 用途的指令编辑，后特化为 classifier-tuning 目标。",
+
+  "metrics": "success_rate（任务分数，其下降触发 evolution）+ 回归率/regression_risk（每编辑评级 none|low|medium|high，Gate 检查其他维度的回归）+ 泛化（anti-over-specificity 门控，frequency>=2）+ 成本相关（有界编辑，每次运行最多 5 次）。expected_impact.magnitude（small|medium|large）是一个自报的效应量估计，由 Gate 核查。",
+  "key_results": "[uncertain]（文章为定性；未报告量化提升数字）。定性主张：自我质询强制优先考虑最简单的干预（捕获了本可用 CLAUDE.md 一行编辑代替整份技能文件重写的情形）；有界的仅 Markdown 范围意味着最坏的可观测失败是一个糟糕的 prompt，会被 Gate 拦截；该架构后来从通用 evolver 特化为针对假阴性削减的目标驱动 Classifier Tuner。",
+
+  "limitations": "文档膨胀（instruction bloat — 首要 anti-pattern；文件可能增长直到 agent 截断/跳过）+ 回归风险（Gate 的存在正是因为编辑可能导致其他维度回归；逐编辑评级）+ eval-hacking 风险（prompt-engineering theater anti-pattern — 滥用 IMPORTANT/Critical 标记；由「改为精确表达」缓解）+ 可控性（依赖强 optimizer backbone；cargo-cult anti-pattern 警告勿在不理解的情况下照搬模式）+ 可迁移性（范围局限于单一产品 pipeline；跨模型/跨 harness 迁移未被验证）。灾难性遗忘相关性较低（无权重训练），但「contradictory instructions」anti-pattern 是其文档空间的类比。",
+
+  "takeaways": [
+    "范围边界是头号安全决策 — 将指令编辑 agent 限定在仅 Markdown/指令文件（不可触碰应用源码、schema、config、生成文件）。理由：能同时修改自身指令与代码库的 agent 具有无界爆炸半径；将编辑限定在 Markdown 意味着最坏情况是一个糟糕的 prompt，可被 Verification Gate 拦截。这一条规则把「令人恐惧的自我修改」转变为「枯燥、有界的自我改进」。可直接移植到任何 SKILL.md-evolver：定义一个显式的 CAN-edit / CANNOT-edit 清单（EvoConfig 式）。",
+    "证据门控编辑 + 强制自我质询迫使最简单干预 — 每条提议的编辑必须引用一个具体的失败签名（trigger_patterns/trigger_findings，frequency >= 2），且一个强制的编辑前自我质询步骤会问「是否有更简单的修复 — 例如在重写整份技能文件前，先在 CLAUDE.md 里改一行？」。这阻止了指令 evolver 最常见的单一失败模式：当一行全局 prompt 微调就足够时却重写整份技能文件。将硬性证据要求与「最简优先」自我质询结合，以保持编辑最小化且可解释。",
+    "负反馈记忆作为 anti-pattern 否决 + Generator-verifier 协同进化 — 仅在分数下降时行动（CASTER 式：失败比成功更具信息量），并将编辑器自身的反复失败模式编纂为显式 anti-pattern（instruction bloat、contradictory instructions、over-specificity、prompt-engineering theater、cargo cult），作为 rejected-edit-direction buffer。将编辑器与一个独立的 Verification Gate（coherence / 跨技能 / consistency / fail-open 检查）配对，其拒绝反馈给一个下调失败编辑类权重的 Meta-Optimizer — 从而闭合一个 generator-verifier 协同进化循环，学习哪类技能改动真正有效。"
+  ],
+
+  "uncertain": [
+    "paper_link",
+    "code_link",
+    "cross_transfer",
+    "retrieval_method",
+    "key_results"
+  ]
+}

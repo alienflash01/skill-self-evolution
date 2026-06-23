@@ -1,0 +1,57 @@
+{
+  "name": "Agent Workflow Memory (AWM)",
+  "institution": "Carnegie Mellon University (CMU) + Massachusetts Institute of Technology (MIT)。作者：Zora Zhiruo Wang、Jiayuan Mao (MIT)、Daniel Fried、Graham Neubig (CMU)。",
+  "release_date": "2024-09-11 (arXiv v1)；发表于 ICML 2025 (Poster)，PMLR 267:63897-63911。",
+  "paper_link": "https://arxiv.org/abs/2409.07429",
+  "code_link": "https://github.com/zorazrw/agent-workflow-memory",
+  "type": "academic",
+
+  "what_evolved": "Context记忆与提示。workflow 是从经验轨迹归纳出的文本块，并被整合进 agent 的 prompt/context 记忆（system prompt 或辅助 context）。无模型权重更新、无工具/动作空间创建、无架构变更。纯非参数化的 in-context 记忆进化。",
+  "skill_as_artifact": "是。每个 workflow 是一个独立、可复用的文本制品，存储在扁平的 workflow memory 中。形式 = 一个文本块，配对 (1) 自然语言 workflow 描述（目标/子目标摘要）与 (2) 一个有序的步骤轨迹，其中每个步骤包含自然语言环境状态描述、自然语言推理，以及一个可执行动作程序（如 click('42')、fill('130','{RepositoryName}')）。workflow 以双换行符分段并分别存储。",
+  "skill_as_doc": "混合。workflow 是一份人类可读的指令文档（自然语言目标 + 状态 + 推理），其中嵌入了可执行的动作代码调用。它相当于一个 mini-SOP，其动作层是对环境执行的可执行程序。主要载体是可读的指令文本并辅以动作代码，因此更偏向「文档式技能」而非纯代码或纯向量。",
+
+  "skill_encoding": "自然语言 SOP（子例程风格），内嵌可执行动作程序。一个 workflow = 自然语言描述 + 步骤列表 [(自然语言状态, 自然语言推理, 动作程序), ...]。基于 LM 的归纳模块通过单次 prompt 通路产出这些内容；输出被分段为独立的 workflow 文本块。不是向量嵌入、不是图、不是多文件包。",
+  "skill_granularity": "子任务 workflow（可复用子例程）。workflow 被有意提取得比完整任务指令更细粒度（如「在 Amazon 上搜索商品」而非「买干猫粮……」）。每个 workflow 有 >=2 个步骤。新的复杂 workflow 由更早的原始 workflow 组合而成（如「按名称找一个地方」->「获取一个地方的邮编」）。",
+
+  "doc_form": "指令 + 内嵌代码块（混合）。每个 workflow 是一个结构化文本块：标题行（## domain: workflow_name）+ 自然语言目标描述 + 编号/分段的步骤列表。每个步骤混合 (a) 自然语言环境状态描述、(b) 自然语言推理/依据、(c) 可执行动作程序调用。具体值被抽象为描述性变量名（{product-name}、{RepositoryName}）。典型长度：每个 workflow 若干步骤（约 2-5 步）。每个网站的 workflow 数量较少（WebArena 上约 7.4，Mind2Web 上约 7.3）。记忆是扁平的（无 YAML frontmatter、无多文件打包）。",
+  "edit_granularity": "整段生成 + 仅追加（append-only）的添加。LM 归纳模块在单次 prompt 中从一个或多个经验生成整个 workflow；归纳出的 workflow 被追加到扁平记忆（M + W）中。无有界 add/delete/replace diff、无 PATCH、无破坏性编辑、无原地重写。复杂 workflow 在更早的 workflow 之上组合式地构建（snowball），但每个新 workflow 是一个全新生成的制品，而非对既有制品的编辑。",
+  "version_gating": "最小。(1) 在线模式：一个 LM-evaluator（Pan et al. 2024 AutoEval）输出二元成功标签；仅被判为成功的轨迹才被转化为 workflow（成功门控的归纳）。(2) 离线模式：workflow 从金标准标注的训练样本归纳（假定正确）。无 held-out 验证、无 Pareto 前沿选择、无 git 分支、无 DAG lineage、无暂存+备份、无人工 review 门控、无回滚。一个 workflow 一旦被添加，就永不被版本化或回退。",
+  "doc_provenance": "两种模式。离线 = 从标注训练样本归纳成功/金标准轨迹（离线 benchmark 训练）。在线 = 从流式测试会话中抽取的自生成成功轨迹（会话经验抽取）。两种情况下来源都是成功的动作轨迹；归纳 LM 抽象掉样本特定的 context。非人工初始化、非执行视频回放、非社区共享。",
+  "cross_transfer": "在 benchmark 内部明确评估了跨任务、跨网站与跨领域迁移（Mind2Web 跨任务/网站/领域划分；WebArena 跨模板子集）。随着训练-测试分布差距增大，在线 AWM 泛化更好（+8.9 至 +14.0 绝对分）。未演示跨模型迁移（仅使用 GPT-3.5/GPT-4），也未演示跨 agent harness 迁移。workflow 按 website 作用域划分（按网站记忆），因此跨完全不同站点的迁移有限；当领域差距较大时离线 AWM 性能下降。",
+  "library_governance": "最小 / 软去重。扁平的按网站 workflow 记忆（一个网站的所有 workflow 共存）。归纳 prompt 指示「不要生成相似或重叠的 workflow」，这是唯一的去重机制。论文将 function-overlap 作为质量指标度量（WebArena 上 0.08，Mind2Web 上 0.20），但不执行主动合并/淘汰/归档。无 Lotka-Volterra 动态、无 curator loop、无层级索引、无淘汰策略。技能库增长无界（仅追加）。",
+  "failure_memory": "无显式 anti-pattern / 失败记忆。失败仅通过排除来处理：不成功的轨迹不被归纳为 workflow（在线模式下被 LM-evaluator 成功门控过滤）。失败被丢弃而非保留；无失败特征库、无归因/补救 buffer、无 rejected-edit buffer、无否决未来相似 workflow 的负反馈。论文承认在线 AWM 仍可能从被误判的自轨迹中归纳出错误 workflow。",
+  "safety_guardrails": "最小/无。无范围边界强制（workflow 是文本而非源码，故不存在 .md 与代码的分离问题）、无编辑前备份或回滚、无 anti-eval-hacking 措施、无确认门控、无人工在环、无有界编辑保护（仅追加是唯一的结构性保障）。唯一门控是在线模式下 LM-evaluator 的二元成功判定。仅追加记忆带来的 context-length 溢出风险未被主动防护。",
+  "coevolution": "skill-only（带有弱的涌现 skill-skill 效应）。workflow 独立进化；工具/动作空间固定（内置 CLICK、TYPE、FILL 等）且从不创建或修改。LM evaluator 是一个固定的外部模块（无 generator-verifier 协同进化）。存在一个涌现的组合效应（新的复杂 workflow 建立在更早的简单 workflow 之上），但这不是结构化的 skill-skill 协同进化机制。",
+
+  "how_method": "imitation_demonstration + 非梯度文本空间 rollout 优化。LM 归纳模块将成功轨迹泛化为可复用的文本 workflow（对成功的抽象模仿）。无 reward-based RL、无梯度/SFT、无种群/进化搜索。它最好被刻画为基于 LM 的经验泛化为文本记忆 prompt 增强（agent context 的非梯度、文本空间优化）。",
+  "learning_signal_source": "成功/失败轨迹（二元）。离线：金标准标注的规范样本（假定正确）。在线：一个 LM-as-judge evaluator（AutoEval，Pan et al. 2024）对自生成轨迹输出二元成功标签。无环境 reward shaping、无自我反思、无 held-out 验证分、无任务成功之外的工具成功指标。",
+  "reward_granularity": "outcome（结果级）。成功判定在整条轨迹/任务级别（轨迹是否解决了指令？），而非逐步骤的 process reward。",
+  "learning_paradigm": "离线与在线兼具。离线 = 在推理前从训练样本归纳（off-policy、类 sleep-time）。在线 = 在流式测试查询期间从 agent 自生成的成功轨迹归纳（on-policy、inter-test-time）。非基于梯度；纯 prompt/context 空间。",
+
+  "when_evolve": "两者皆有。离线 = sleep-time / inter-test-time（在服务测试查询前从训练样本一次性归纳）。在线 = inter-test-time（在完成一个流式测试任务并判定成功后，归纳 workflow(s) 并在下一个任务前加入记忆）。非 intra-test-time（单个任务执行过程中不发生归纳）。",
+  "trigger": "事件触发（成功后）+ 课程驱动。在线：每个测试任务完成后，若被判为成功，则归纳 workflow(s)。涌现出 snowball/课程效应：越来越复杂的 workflow 建立在更早归纳的 workflow 之上（如「找一个地方」使能「获取一个地方的邮编」）。非周期/cron、非失败触发（失败不触发归纳）、非使用驱动的检索。离线：对每个网站的所有训练样本做一次性批量归纳。",
+
+  "library_structure": "扁平的、按网站的 workflow 记忆。给定网站的所有归纳 workflow 被拼接到 agent 的辅助记忆/context 中。无层级、无向量库、无图/DAG lineage、无云端注册中心。论文显式地按网站对样本分组，以保持每个局部 workflow 集合小而相关。",
+  "retrieval_method": "无 / 全 context 注入（不使用 generation-as-retrieval）。AWM 将为相关网站归纳的所有 workflow 加载到该网站上每个测试任务的 prompt 中；无逐查询语义相似度检索、无 BM25+embedding 重排、无 workflow 匹配。唯一的作用域划分是网站级分组。这是与 Synapse/ExpeL 等基于检索的样本方法的刻意对比。（摘要中「selectively providing workflows」一语指网站级选择，而非逐查询检索。）",
+
+  "validation": "LLM-judge（在线）+ 金标准假设（离线）。在线：LM-evaluator（AutoEval）提供一个二元成功门控，决定一条轨迹是否有资格被蒸馏为 workflow。WebArena 另外提供基于执行的功能正确性评估用于报告。无对归纳 workflow 本身的 held-out 验证门控、无成功判定之外的代理 verifier、无多模型辩论。workflow 质量事后通过 #workflows、coverage、function-overlap 与 utility-rate 指标评估。",
+  "error_correction": "有限 / 归纳时过滤。错误通过排除处理：仅成功轨迹被蒸馏，故噪声在上游被过滤。一个 workflow 一旦被归纳，就永不被修订、回滚、diff-patch 或有界编辑。论文指出在线 AWM 仍可能注入错误 workflow（当自预测轨迹被误判为成功时），且 agent 有时难以偏离 workflow 指导（action F1 略低于 MindAct）。",
+
+  "test_env": "Web 导航（WebArena + Mind2Web）。WebArena：5 个网站上 812 个基于执行的任务（电商/CMS/Reddit/GitLab/Maps）。Mind2Web：跨 200+ 领域的任务/网站/领域划分。",
+  "backbone_model": "GPT（闭源）。GPT-4 (gpt-4-0613) 与 GPT-3.5-turbo，temperature 0.0。同一模型同时用于 workflow 归纳与 agent 动作生成（无 optimizer/target 分离）。纯文本输入（accessibility-tree 网页表示）；无视觉语言模型。",
+  "where_deploy": "Specialized（Web 导航 / 数字 GUI agent 领域）。通用 Web 任务（旅行、购物、社交媒体、开发协作、内容管理）。",
+
+  "metrics": "success_rate（任务级与步骤级 SR、元素准确率、action F1）；泛化（跨任务 / 跨网站 / 跨领域 / 跨模板）；样本效率（从约 40 个样本中快速学习）；skill_library_growth（workflow 数量、coverage、function-overlap、utility rate）；成本（每个成功任务的平均步数）。",
+  "key_results": "WebArena：35.5% 总 SR，对比 BrowserGym_ax-tree 23.5%（+12.0 绝对、+51.1% 相对）以及对比 AutoEval 20.2%；在无任何人工监督下相对 SteP（14 个人工编写 workflow）领先 +7.6% 相对；每个成功任务的步数相比基线减少约 2.0（比 AutoEval 少约 40.8）。Mind2Web 跨任务：+24.6% 相对步骤 SR（AWM_4 步骤 SR 45.1 对比 MindAct 36.2）。跨模板子集：33.2% SR（仍为最佳）。在线 AWM 泛化：在跨任务/网站/领域上相对 MindAct +8.9 至 +14.0（最高 +16.9）绝对分，且随分布差距增大而优势扩大。样本效率：大部分增益在前约 40 个流式样本内获得。workflow 质量：每个网站约 7.4 个 workflow（WebArena），utility rate 0.94，function overlap 0.08。",
+
+  "limitations": "可迁移性（当训练-测试领域差距扩大时离线 AWM 性能下降；workflow 按 website 作用域划分）；回归风险 / optimizer 质量（在线 AWM 从模型预测轨迹归纳 workflow，这些轨迹「并非总是正确」，故被误判的成功会注入错误 workflow 从而降低性能）；doc_bloat / 可扩展性（仅追加的扁平记忆无淘汰；所有 workflow 加载进 context 且无检索，规模化时有 context 溢出风险）；可控性（当状态偏离时 agent 有时无法脱离 workflow 指导，降低 action F1）；单一闭源 backbone 家族（GPT-3.5/4）；纯文本观测（无视觉）；归纳与生成均依赖一个足够强的 LM。",
+
+  "takeaways": [
+    "蒸馏技能时抽象掉样本特定的 context。AWM 的归纳 prompt 刻意用描述性变量名替换具体值（如「干猫粮」-> '{product-name}'），并提取比完整任务指令更细的子例程。这使得一个技能可跨许多任务复用，并在经验上胜过检索具体的整轨迹样本（Synapse）：+5.0 元素准确率、+4.0 步骤 SR。对 SKILL.md 的启示：将技能写成泛化、参数化的 SOP，而非字面记录。",
+    "在提交技能前用二元成功判定为自进化设门控。在无监督的在线模式下，LM-evaluator 判定每条轨迹成功/失败，仅成功者被蒸馏进记忆。这是一个廉价、免标签的质量门控，使 agent 能从自身验证的胜利中自主增长其 SKILL.md，同时过滤大部分噪声。（他们注明的告诫：判定器可能出错，故仍有少量不良技能混入。）",
+    "通过仅追加的组合式记忆实现 snowball。AWM 从不破坏性地编辑 workflow；它只追加新的，后续复杂 workflow 通过组合更早的原始 workflow 构建（「找一个地方」->「获取一个地方的邮编」）。这产生了课程效应，带来快速的早期增益（约 40 个样本）。启示：对于自进化的 SKILL.md，优先选择非破坏性地追加新的、可组合的技能，而非有风险的原地重写，从而使能力累积而不发生回归。",
+    "全 context 注入在小规模下胜过检索但无法扩展。AWM 将每个网站全部（约 7 个）workflow 加载进 prompt 而不使用检索，仍然获胜。这表明对于一个规模小、作用域明确的 SKILL.md 库，简单的全 context 加载即可；但仅追加、不去重、无淘汰的设计是一个公认的可扩展性上限，未来的 SKILL.md 系统应通过检索 + 技能库治理来解决。"
+  ],
+
+  "uncertain": []
+}

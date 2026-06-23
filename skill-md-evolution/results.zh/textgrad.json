@@ -1,0 +1,55 @@
+{
+  "name": "TextGrad",
+  "institution": "Stanford University（Zou Group / James Zou Lab）。作者：Mert Yuksekgonul、Federico Bianchi、Joseph Boen、Sheng Liu、Pan Lu、Zhi Huang、Carlos Guestrin、James Zou。",
+  "release_date": "arXiv 预印本：2024-06-11（arXiv:2406.07496）。发表于 Nature：2025-03-19（Nature vol. 639, pp. 609-616；Nature 标题：'Optimizing generative AI by backpropagating language model feedback'）。",
+  "paper_link": "https://arxiv.org/abs/2406.07496 ；Nature：https://www.nature.com/articles/s41586-025-08661-4",
+  "code_link": "https://github.com/zou-group/textgrad（MIT license；pip/conda install textgrad）",
+  "type": "academic",
+
+  "what_evolved": "Context 记忆与提示（Context/Prompts）。TextGrad 不触碰模型权重；它把复合 AI 系统中的文本取值组件视为可学习的「变量」（tg.Variable，requires_grad=True），并在文本空间中优化它们。可优化的变量包括：system/user 提示、思维链解、代码片段、few-shot 示例、分子结构（SMILES）以及放射治疗计划。复合 AI 系统被建模为一个计算图，其节点是（不一定可微的）函数调用的输入/输出；反向传播把自然语言「文本梯度」（批评）从目标/loss 流回每个叶子变量。这是「prompts-as-parameters」的基础范式。",
+  "skill_as_artifact": "部分是。每个被优化的对象都是一个一等公民 tg.Variable（value + role_description + requires_grad + gradients + gradients_context），最终优化值（如改进后的 system prompt）是一个可保存/导出的普通可复用字符串。但 TextGrad 不提供任何持久化的 skill-library / artifact-management 抽象：变量仅存在于优化运行期间的记忆体内计算图中。没有版本化的 skill-pack、没有跨运行 registry、没有 skill-file 格式。因此：制品 = 一段文本字符串（prompt/solution），而非受管理的 SKILL.md 风格文件。",
+  "skill_as_doc": "否。被优化对象是一个原始文本字符串（自然语言提示、代码或如 SMILES 的结构化字符串），而非人类可读的指令文档。没有 markdown/SKILL.md 载体，也没有结构化的 YAML-frontmatter 正文。最接近的类比是「优化一个 system-prompt 字符串」，这是纯指令文本而非结构化文档。（仅在变量值可能内含代码块的平凡意义上属于「混合」。）",
+
+  "skill_encoding": "自然语言文本字符串（提示、推理、批评）/ 可执行代码（LeetCode 解）/ API 调用图（BlackboxLLM、FormattedLLMCall）/ 结构化字符串（SMILES 分子、放射治疗计划参数）。变量是带 role_description 标注的普通 Python 字符串；其「编码」只是字符串 + 角色元数据，封装在一个类 PyTorch autograd 图中（Function/Module，含 forward+backward）。",
+  "skill_granularity": "策略规则 / 完整 system-prompt 级（典型用例是为某个 QA 任务优化一整个 system prompt）。也支持整体解粒度（一道题的完整 CoT 解）、整体代码片段粒度（一整个 LeetCode 解）以及分子/计划粒度。粒度较粗 = 整个变量是一个优化单元；变量内部没有原子动作或子步骤的分解。",
+
+  "doc_form": "纯文本 system-prompt 字符串（无 frontmatter，无结构化字段）。典型长度：几百 tokens 到约 1-2k tokens 的 system prompt（如 BBH 任务描述 + 累积指令）。改进后的提示由 TGD optimizer 在 <IMPROVED_VARIABLE></IMPROVED_VARIABLE> 标签之间输出。对于代码/分子/计划优化，「文档」即对应的代码/SMILES/计划字符串。无多文件打包。",
+  "edit_granularity": "整变量重写（whole-variable regeneration）。TextualGradientDescent optimizer 让 optimizer-LLM 输出一个全新的 <IMPROVED_VARIABLE> 替换整个旧值；核心中没有 minimal-diff / PATCH / add-delete-replace 原语。（string_based_ops.py 提供少量字符串操作，但标准路径是整体重写。）具体地 optimizer.step() 解析 new_value = response.split('<IMPROVED_VARIABLE>')[1].split('</IMPROVED_VARIABLE>')[0] 并调用 parameter.set_value(new_value)。",
+  "version_gating": "留出验证门控 + 在 dev 划分上的贪心爬山选择。在 evaluation/prompt_optimization.py 中，run_validation_revert() 在每次 optimizer step 之后于 val_set 上评估候选提示；若 val 准确率跌破此前最佳，则把变量回滚到上一个值（system_prompt.set_value(previous_prompt)）并记录被拒提示。额外的稳定性机制：gradient_memory（保留最近 N 条文本梯度）与 TextualGradientDescentwithMomentum（保留过去 {value, gradient} 对的动量窗口）。无 git/DAG/Pareto-front 版本管理。",
+  "doc_provenance": "初始值由人工/种子初始化（如 STARTING_SYSTEM_PROMPT = train_set.get_task_description()）。后续版本由文本梯度反馈经 LLM 生成：反向产生自然语言批评，TGD optimizer LLM 重写该变量。因此 provenance = 人工种子 + 由 LLM-critic 反馈驱动的迭代式 LLM 再生（一种失败轨迹/批评蒸馏）。",
+  "cross_transfer": "跨模型：设计上很强——引擎抽象（OpenAI/Anthropic/Gemini/Together/Bedrock/Cohere/Groq/vLLM/local/litellm）与显式的 optimizer/target 分离（前向「test」引擎如 gpt-3.5-turbo 可用更强的反向引擎如 gpt-4o 来优化）。跨任务：框架与任务无关（同一 API 适用于 QA、代码、分子、放射治疗）。跨用户/跨 harness：未涉及（无 agent-harness 概念）。未对单一优化提示的跨模型迁移做实证研究。",
+  "library_governance": "在 skill-library 层面不存在——TextGrad 不维护技能库。类似治理的有界机制：(1) gradient_memory 对每个变量只保留最近 N 条梯度（有界 buffer，防止无界增长）；(2) 动量窗口限制历史；(3) 验证回滚丢弃回归候选。无去重/合并、无退役/归档、无分层索引、无 curator loop。",
+  "failure_memory": "部分有。(1) 验证回滚在候选于 dev 划分上表现不佳时记录「rejected prompt」——这是一种弱的负信号，但未被作为可复用的 anti-pattern 存储。(2) gradient_memory 把过去的文本梯度（往往描述错误）留到下一次 optimizer step。(3) momentum_storage 存储过去的 {value, gradients}。然而没有显式的失败特征库、没有归因+补救的 anti-pattern 库，也没有被复用以否决未来编辑的 rejected-edit buffer。因此：通过回滚给出隐式负反馈，而非持久的 failure-memory 制品。",
+  "safety_guardrails": "轻量。(1) 留出验证回滚（run_validation_revert）是首要保障——拒绝回归编辑并恢复上一个值。(2) optimizer 的自然语言 constraints 参数（constraints=[...]）让用户用规则约束编辑器；(3) in_context_examples 引导重写方向；(4) gradient_memory/momentum 抑制失稳编辑。除回滚外无自动的编辑前备份+回滚、无范围边界强制（任意字符串都可被重写）、无 eval-hacking 防御、无人工在环门控、默认无注入/密钥检查。",
+  "coevolution": "generator-verifier 协同进化（前向模型 vs 反向/评估引擎）是核心架构：前向 LLM（目标）产出输出，独立的反向引擎（LLM-as-critic）产出梯度，loss/eval 模块充当验证器——optimizer 与 target 显式可分离（set_backward_engine）。此外也支持 skill-prompt 联合优化（一个 optimizer.parameters() 列表中含多个 Variable，如 system_prompt + few-shot 示例一起更新）。它不是 skill-tool 或 skill-skill 的生态协同进化（无工具 registry、无多 agent 技能生态）。",
+
+  "how_method": "reward-based 的文本反馈驱动的文本空间 rollout_optimization（非梯度）——这是文本空间优化范式的奠基性 How-idea。机制：(1) 前向——运行复合系统（LLM 调用 / 工具）产出输出；(2) Loss——一个 TextLoss/MultiFieldEvaluation/MultiChoiceTestTime/ImageQALoss 模块（给定自然语言目标的 LLM 评估器）对输出打分并发出文本「loss」；(3) 反向——沿 autograd 图执行链式法则：每个 LLMCall.backward() 在给定对话 + 下游梯度的情况下，让反向引擎批评每个 requires_grad 的前驱变量；aggregate()/Sum 跨 batch 合并梯度（aggregate = 对多条反馈的 LLM 摘要，见 reduce_prompts.py 的 REDUCE_MEAN_SYSTEM_PROMPT）；(4) Optimizer.step()——TextualGradientDescent 把 {变量值, 角色, 文本梯度, 约束, in-context 示例, 梯度记忆} 喂给 optimizer LLM，输出一个 <IMPROVED_VARIABLE>。无权重梯度、无 SFT、无 RL 策略更新——纯文本空间重写，把 LLM-as-judge 的批评当作「文本梯度」。比喻：把 autograd/backprop 应用到文本变量。",
+  "learning_signal_source": "LLM-as-judge（loss/eval 函数本身就是一个带自然语言评估指令的 LLM 调用——如 TextLoss、MultiChoiceTestTime 的 'Investigate the reasoning and answer... be very critical'）；对代码任务，是基于执行的信号（LeetCode 测试通过/失败）；对 QA，是真值准确率。留出验证分（val_set 准确率）驱动贪心回滚决策。「文本梯度」= LLM critic 对某变量应如何改变的自然语言描述。",
+  "reward_granularity": "混合，以 process 为主。TextLoss/反向引擎批评推理过程（'Investigate the reasoning and answer... raise potential issues and mistakes'），故梯度是 process 级批评。outcome 信号（对/错、测试通过/失败）用于 eval/val 层。即 process（批评）+ outcome（准确率）混合。",
+  "learning_paradigm": "离线、跨 minibatch 的迭代优化循环（基于 epoch，batch_size 默认 3，max_epochs 默认 3）。实质上 on-policy（每 batch 从当前变量值新生成响应）且离线（在部署前于固定的 train/val/test 划分上运行，而非在实时服务期间）。test-time-loss 变体更接近在线 intra-test-time（在 context 内改进单条响应），但头条的提示优化范式是离线 batch 优化。",
+
+  "when_evolve": "以 inter-test-time 为主（任务执行之间/前后的离线优化：在 train batch 上跑 optimizer，在 val 上验证，在 test 上评估）。MultiChoiceTestTime / test-time-loss 用例属于 intra-test-time（推理期精修单条响应）。无 sleep-time/overnight replay 调度。",
+  "trigger": "周期性 / 课程驱动：一个固定的优化循环（在 train_loader batch 上跑 max_epochs），即 epoch 驱动。也按 batch 事件触发（每 batch 反向后执行 optimizer.step()）。框架本身无 cron/launchd、无失败触发的再优化、无基于使用量或工具退化的触发（由用户手动启动优化脚本）。",
+
+  "library_structure": "无技能库。变量构成一个临时的记忆体内 DAG（由带前驱与 grad_fn 的 Function/Module 节点构成的计算图）。对提示优化而言，结构实质上是扁平的（一个被优化的 system_prompt Variable）。无向量库、无文件目录、无 git 分支、无云端 registry。",
+  "retrieval_method": "在「库」意义上不适用——被优化的变量被直接使用（字符串替换进下一次前向调用）。在一次运行内，gradient_context 元数据把每条梯度链接到产生它的对话/context（gradients_context 字典），optimizer 据此检索以构造更新提示。无语义相似度 / BM25 / generation-as-retrieval。",
+
+  "validation": "留出验证（val_set）+ 验证门控（run_validation_revert 在回归时回滚）+ LLM-judge（eval_fn / loss 本身是 LLM 评估器）+ 代码的执行正确性（LeetCode 隐藏测试）与 QA 的真值准确率。未使用多模型辩论；代理验证器 = 反向引擎自身。代码做功能正确性检查；由 load_task 返回任务特定的 eval_fn。",
+  "error_correction": "回滚 / 恢复（run_validation_revert 在 val 回归时恢复上一个提示）+ 自我修订（optimizer LLM 依文本梯度重写变量）。通过 constraints + gradient_memory + momentum 做有界编辑。无定向 diff patch、无显式重规划模块——纠错即由验证门控的整变量重生。",
+
+  "test_env": "通用 / 多领域：QA（GPQA、MMLU、BBH、GSM8K）、编程（LeetCode-Hard）、经复合系统的工具使用、分子优化（类药小分子，in silico 结合）、放射治疗计划。textgrad/tasks 中提供的任务加载器：big_bench_hard、gpqa、gsm8k、leetcode、mmlu、multimodal。",
+  "backbone_model": "以 GPT 系列为主（GPT-4o 作为反向/评估引擎，gpt-3.5-turbo 作为提示优化示例中的前向 test 引擎）。显式 optimizer/target 分离：set_backward_engine() 把 critic（强）与前向模型（目标）解耦。支持 OpenAI、Anthropic、Gemini、Together、Bedrock、Cohere、Groq、vLLM、local（LM Studio/OpenAI 兼容）以及基于 litellm 的实验性引擎——任意 LLM 都可作前向或反向引擎。多模态经 OrderedFieldsMultimodalLLMCall（GPT-4o vision）。",
+  "where_deploy": "general——TextGrad 是面向任意复合 AI 系统的通用优化框架，横跨推理、编程、化学与医学得到验证；不专用于单一垂直领域。",
+
+  "metrics": "success_rate / accuracy（test_set 上的 QA 准确率、LeetCode 通过率）、泛化（优化后的提示在留出 test 划分上评估并显示改进了 GPT-4o 的 zero-shot）、相对性能增益（LeetCode-Hard 上 +20% 相对）、成本（LLM 前向+反向调用次数——报告不多）、样本效率（在几个 epoch / 3 步内收敛）。还有领域内指标：分子对接分数、放射治疗计划特异性。skill-library 增长与经济价值指标不适用。",
+  "key_results": "(1) GPT-4o GPQA zero-shot 准确率开箱即从 51% 提升到 55%，无需改动框架。(2) LeetCode-Hard 编程解优化上 +20% 相对增益。(3) 改进了推理任务的提示（BBH 物体计数示例：一次 TGD step 后错答 7 -> 正确 10）。(4) 设计出具有理想 in silico 结合的全新类药小分子。(5) 设计出高特异性的放射肿瘤治疗计划。(6) 在异构变量类型（文本、代码、分子、计划）上以单一类 PyTorch API 工作，且无需逐任务调框架——用户只需提供目标函数。",
+  "limitations": "optimizer_quality（高度依赖一个强的反向/optimizer LLM——代码在 optimizer「无法遵循指令」时显式警告 IndexError 并建议「using a stronger model」）；在未见数据上的回归风险（由 val 回滚缓解但未消除——会过拟合 dev 划分）；成本/可扩展性（每一步 = 多次前向 + 反向 LLM 调用；计算图深度会倍增反向调用）；eval-hacking 风险（LLM-as-judge 的 loss 可能被冗长/长度利用型输出钻空子）；单一优化提示的跨模型迁移性无保证；无灾难性遗忘概念（无状态变量）但也无持久记忆；doc_bloat 未被专门处理，但优化后的提示可能跨步骤无界增长。",
+
+  "takeaways": [
+    "1. 把 Prompts/SKILL.md 当作可学习参数——在计算图内把 SKILL.md 包装为一个 requires_grad=True 的 Variable；agent 执行的每一步都是一个可微的「Function」，含前向（运行）与反向（反思）。这是「反思 = 反向」的概念源头：agent 的自然语言自我批评本身就是文本梯度。",
+    "2. 反向即反思，且 optimizer/target 分离——用一个强且独立的「反向引擎」（可以是同一模型的 critic 模式，或更强的 judge）读取执行轨迹 + 结果，并对 SKILL.md 的每个可编辑组件发出自然语言梯度（「做 X 的指令是错的，因为……改成……」），然后一步 TGD 风格的 optimizer 重写该段。批评经链式法则按变量（按段）局部化，而非一次全局重写。",
+    "3. 留出验证门控 + 贪心回滚（run_validation_revert）作为实用的安全网——每次 SKILL.md 编辑后，在留出的 dev 任务 batch 上重新评估，若准确率/回归下降则回滚该编辑；外加 gradient_memory + momentum 让编辑器保持稳定。三者合起来给出一个即插即用、PyTorch 风味的「autograd for skills」循环：前向=运行，loss=LLM-judge+执行，反向=逐段批评，optimizer=有界重写，gate=dev-split 回滚。"
+  ],
+
+  "uncertain": []
+}

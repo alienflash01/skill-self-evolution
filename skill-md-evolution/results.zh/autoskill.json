@@ -1,0 +1,63 @@
+{
+  "name": "AutoSkill / SkillEvo",
+  "institution": "ECNU-ICALK（华东师范大学计算机科学与技术学院），与上海人工智能实验室合作。主要作者：Yutao Yang、Junsong Li、Qianjun Pan（同等贡献）；通讯作者：Jie Zhou、Kai Chen、Liang He。",
+  "release_date": "arXiv v1 提交于 2026-03-01，v2 于 2026-03-05。发布时间线：AutoSkill 1.0（2025-02-04，对话期技能提取）-> AutoSkill4OpenClaw 1.0（2025-02-26，轨迹驱动技能进化）-> 离线对话提取（2026-03-01）-> AutoSkill4Doc 1.0（2026-03-13，文档转技能流水线）-> SkillEvo 1.0（2026-03-23，回放/评估/变异/晋升框架）。",
+  "paper_link": "https://arxiv.org/abs/2603.01145 (arXiv:2603.01145 [cs.AI], CC BY 4.0)",
+  "code_link": "https://github.com/ECNU-ICALK/AutoSkill（MIT 许可证；包含 autoskill/ SDK、SkillEvo/ 运行器、AutoSkill4Doc/、AutoSkill4OpenClaw/、SkillBank/、web/、examples/、Docker）",
+  "type": "academic (formal arXiv paper with Method/System/Experimental sections) AND industry (open-source deployable framework with Python SDK, Web UI, OpenAI-compatible proxy, Docker Compose). Classified here as academic because the arXiv paper is the canonical citable artifact.",
+
+  "what_evolved": "Context 记忆与提示（外部技能记忆 + 注入的提示 context）。不更新任何模型权重（training-free）。不进化工具定义，不改变 agent 架构。进化目标是一组 Agent Skill 制品（SKILL.md），在推理期被检索并作为附加 context 注入。AutoSkill 明确将自身与更新参数的自进化相对照。",
+  "skill_as_artifact": "是。技能是独立的可复用制品：以 SKILL.md 文件为核心的 Agent Skill，可选地与 scripts/、references/、assets/ 共置为多文件包。每个制品拥有 UUID id、语义版本（如 v0.1.34），并持久化在本地 SkillBank 目录中（Skills/Users/<user_id>/<skill-slug>/SKILL.md 与 Common/<skill-slug>/）。",
+  "skill_as_doc": "是（含可选的混合扩展）。核心载体是人类可读的 markdown 指令文档（SKILL.md）。少数技能（如内置的 anthropics-skill 包）还在 scripts/ 下附带可执行代码，使其成为指令+代码的混合包，但 AutoSkill 自身提取的技能是纯 markdown 指令文档。",
+
+  "skill_encoding": "结构化技能文档：YAML frontmatter（id、name、description、version、tags、triggers、examples）+ markdown 指令正文（# Goal、# Constraints & Style、可选的 # Workflow、Anti-Patterns、Role & Objective、Communication & Style Preferences、Operational Rules）。非可执行代码，非纯向量，非 docstring。AutoSkill4Doc 增加可配置的技能分类法（asset_type: macro_protocol/session_skill/micro_skill/safety_rule/knowledge_reference）与可见的 domain->family->level1->level2->micro 层次结构。",
+  "skill_granularity": "以策略规则 / 见解为主（稳定的用户偏好、风格约束、响应策略、领域操作约定、anti-pattern）。部分技能是子任务 workflow（带显式 # Workflow 区段者，如 Selenium 自动化、文档协同撰写）。AutoSkill4Doc 产出带父子层次结构的完整技能包。原子动作粒度很少见。",
+
+  "doc_form": "结构化字段：YAML frontmatter（id/name/description/version/tags/triggers/examples）+ markdown 正文（Role & Objective、# Goal、# Constraints & Style、可选的 # Workflow、Anti-Patterns、Output Format）。典型 token 长度：每个技能几百到约 1-2k tokens（案例研究技能 顶级心理咨询师 ~400 tokens、professional_text_rewrite ~600 tokens；AutoSkill4Doc 导航/父技能更大）。多文件包额外包含 scripts/、references/evidence.md + evidence_manifest.json、assets/。",
+  "edit_granularity": "以全新生成为主（LLM 提取产出一个全新的候选技能）+ 经语义合并的整文档重写（合并模型重写整个技能并保持身份；非原始拼接，非最小 diff/PATCH）。AutoSkill4Doc 的 register_versions 支持 create/strengthen/revise/merge/split/unchanged。SkillEvo 使用 LLM 引导 + 启发式对整段技能文本进行变异。不使用有界 add/delete/replace 或 PATCH 式的精细编辑。",
+  "version_gating": "多种机制：(1) 合并时补丁号递增的语义化版本（Bump 算子，如 v0.1.0 -> v0.1.1，观测到最高 v0.1.34）；(2) 暂存 + 备份，带回滚 API（POST /v1/autoskill/skills/{id}/rollback、GET .../versions、_autoskill_version_history）；(3) SkillEvo 增加留出验证门控（冻结的 mutate_dev 划分用于变异，单独的 promotion_test 留出划分；仅当候选击败当前 SkillEvo 冠军时才晋升）；(4) 审查门控采纳（人工可编辑/保存/删除 SKILL.md；AutoSkill4Doc 生命周期 candidate->draft->evaluating->active->watchlist->deprecated->retired）。无 git-branch Pareto 前沿选择。",
+  "doc_provenance": "会话经验提取（主要：聊天期间从对话用户 query 实时提取）、成功轨迹归纳（用 --success-only 1 从 agent 轨迹离线提取）、执行录像回放（SkillEvo 从存储的 history[].messages 构建冻结的回放池并重放）、LLM 一次性生成（提取器/合并器是 prompt 驱动的 LLM）、人工初始化（种子技能 + 内置 anthropics-skill 导入）、离线 benchmark 训练（在 WildChat-1M 上离线提取以引导 SkillBank），以及 AutoSkill4Doc 的文档提取。通过 import 端点与 Common/ 库进行社区共享。非失败轨迹蒸馏。",
+  "cross_transfer": "跨模型强（模型无关：可插拔 DashScope/Qwen、GLM/Zhipu、InternLM、OpenAI、Anthropic 与通用 OpenAI 兼容后端；embedding 提供方亦可插拔）。跨 agent harness（AutoSkill4OpenClaw 将维护的技能镜像到 OpenClaw 原生的 ~/.openclaw/workspace/skills 目录；标准化的 Agent Skill 格式支持导入/导出）。跨任务且跨用户（每用户 SkillBank Users/<id> + 共享 Common/ 库）。跨语言（基于 WildChat 构建的中/英文技能库）。跨基准迁移未被显式评估。跨基准迁移为 [uncertain]。",
+  "library_governance": "去重合并（当存在相似的用户技能时优先合并而非新建副本；维护者的主要决策是 add/merge/discard）、相似度检索编辑目标（维护先检索 top-M 最相似技能作为局部证据，而非对整个库推理）、灰尘清理（自动清理陈旧用户技能：默认在 retrieved >= 40 且 used <= 0 时清理；按用户的用量计数器）、层次化索引（AutoSkill4Doc 可见的 domain_root / Family 技能 / 一级技能 / 二级技能 / 微技能 树）。主循环中无显式的 Lotka-Volterra 退役或归档分层（生命周期状态仅存在于 AutoSkill4Doc）。",
+  "failure_memory": "部分。(1) 合并 prompt 强制「避免回归：保留现有技能中的重要检查」与「不要带入陈旧或无关主题的约束」，充当软负向指导。(2) 每个 SKILL.md 正文通常包含一个 Anti-Patterns 区段（如「不要提供医学诊断」、「不要添加开场客套」）作为技能内负向指导。(3) SkillEvo 拒绝未晋升的变异，并在回放数据过小时将谱系保持在「incubating」状态。但不存在专门的 anti-pattern 记忆存储，不存在 failure-signature+attribution+remedy buffer，也不存在跨技能复用为全局负反馈的 rejected-edit buffer（那是 SkillSmith 式的能力，AutoSkill 不具备）。",
+  "safety_guardrails": "(1) 范围边界：AutoSkill4OpenClaw 明确不替换 OpenClaw 的记忆、ContextEngine、system prompt、工具、provider 选择或模型路由；它仅编辑/镜像 SKILL.md 文件与附加 context。(2) 编辑前备份+回滚：version_history、rollback API、暂存快照、AutoSkill4Doc 的 .runtime/intermediate_runs 用于崩溃恢复。(3) 确认门控 + 人工在环：人工可通过 REST API 与文件系统直接检查/编辑/保存/删除 SKILL.md。(4) 有界编辑防破坏性重写：合并保持技能身份、去重并避免回归；OpenClaw 嵌入模式下不安全的合并目标降级为「add」（不盲目合并）；重复的候选技能在维护前被跳过。(5) Discard 门控拒绝通用/低信号/不可移植的候选以防止技能库噪声。除 SkillEvo 留出划分外无显式 eval-hacking 防御；无密钥/注入检查。",
+  "coevolution": "以 skill-only 为主。技能独立于工具和彼此进化（无 skill-tool bundle 编辑，无 generator-verifier 协同训练）。存在通过合并/去重决策产生的弱 skill-skill 生态交互（新候选与其最近邻技能比较）。AutoSkill4OpenClaw 将技能镜像到 OpenClaw 的工具加载目录，但不进化 OpenClaw 的工具。SkillEvo 是一个 skill-only 的回放/变异循环。因此：skill-only（带轻量 skill-skill 去重联动）。",
+
+  "how_method": "Training-free、prompt 驱动的组合（无 gradient/RL/SFT）。由 prompt 实例化的五个 LLM 模块：query rewriter、response generator、skill extractor、management judge、skill merger（+ embedding 模型）。范式混合：(a) imitation_demonstration / 经验蒸馏（提取从用户交互轨迹中抽象出可复用模式）；(b) reward-based 配合 LLM-as-judge（management judge 决定 add/merge/discard；SkillEvo judge 对二元 eval 规则打分）；(c) 文本空间的 rollout_optimization（SkillEvo：replay -> evaluate -> mutate -> promote，非梯度）；(d) population_evolutionary 元素（SkillEvo 冠军注册表、变异预算）。核心 AutoSkill 循环是 (a)+(b)；SkillEvo 增加 (c)+(d)。",
+  "learning_signal_source": "成败轨迹（离线轨迹提取使用 --success-only 1；仅提取含 >=1 个成功主轮次的已关闭会话）、LLM-as-judge（管理决策、SkillEvo judge-LLM 二元规则）、自我反思（提取与合并是 LLM 驱动的抽象）、工具成功率指标 / 使用指标（retrieved/relevant/used 用量计数器驱动清理）。关键在于，提取仅以用户 query {q1..qt} 为证据，而非模型响应 rt，以捕获稳定的用户需求而非模型产物。",
+  "reward_granularity": "outcome（会话/轮次级）。提取在轮次/会话边界后触发；管理决策按候选进行；SkillEvo 晋升是在留出回放样本上的二元 outcome。不使用 process 级逐步奖励。仅在弱意义上混合：用量计数器跨轮次累积。",
+  "learning_paradigm": "在线与离线兼有；在线提取为 on-policy（使用当前模型自身的轨迹）；SkillEvo 回放、离线对话/文档/轨迹批量提取与启动期维护为 sleep-time/离线。在线提取在服务期间于后台异步运行（非阻塞）。因此：online inter-test-time + offline sleep-time replay。",
+
+  "when_evolve": "inter-test-time（轮次/会话后的提取；AutoSkill4OpenClaw 的 agent_end hook）+ sleep-time（SkillEvo 离线回放；在 WildChat 上的离线批量提取；启动期离线维护）。不进行 intra-test-time 进化（轮次内只发生检索+注入；进化循环是异步/后台的）。",
+  "trigger": "事件触发（轮次/会话关闭后；AutoSkill4OpenClaw 的 agent_end / before_agent_start hooks；OpenAI proxy 在响应后调度提取）、使用驱动（extract_mode=auto 每 extract_turn_limit 轮、=always 每轮、=never 关闭；/extract_now [hint] 强制提取）、失败触发 / 成功触发（用 --success-only 1 的轨迹提取；仅当已关闭会话含 >=1 个成功主轮次时才运行提取）、周期性（AutoSkill4OpenClaw 的 sessionMaxTurns=20 自动关闭长会话以强制一次提取）。非课程驱动，非工具退化触发。",
+
+  "library_structure": "技能文件目录（SkillBank/Users/<user_id>/<skill-slug>/SKILL.md + Common/<library>/<skill-slug>/ + vectors/<embedding-signature>.{meta.json,ids.txt,vecs.f32} + index/skills-bm25.* + skill_usage_stats.json）、向量库（按 embedding 签名索引的磁盘 f32 向量缓存，每个 embedding 模型一个独立索引）、层次化（AutoSkill4Doc 的 domain_root/Family 技能/一级技能/二级技能/微技能 可见树 + .runtime/document_registry）。版本历史存储在技能元数据内的 _autoskill_version_history 中。无 git-branch 前沿，无云端注册中心（local-first；Docker 挂载 ./SkillBank）。",
+  "retrieval_method": "混合：语义相似度（dense embedding，sim(Memb(q~), Memb(s))）+ BM25 词法，以加权和 Rel = lambda*d_hat + (1-lambda)*b_hat 组合，带 min_score 阈值 eta + top-k。前置 LLM query 重写（解析共指、保留任务锚点、暴露对检索关键的约束）。管理期检索使用单独的权重 alpha 与 top-M 邻居集。AutoSkill4Doc 在元数据丰富的技能文本上使用 embedding + BM25 用于 register_versions。Description/tags/triggers 匹配实际驱动加载。主循环中无 LLM re-rank 步骤（selection.py 有一个可选的 LLM 技能选择器）。",
+
+  "validation": "LLM-judge（prompt 驱动的 management judge 在四个轴上比较候选与最近邻技能：job-to-be-done、交付物类型、硬约束、所需工具/workflow）、留出评估（SkillEvo：冻结的 mutate_dev 划分用于变异，单独的 promotion_test 留出划分）、功能正确性检查 / 程序化验证（SkillEvo 从 prompt + 需求统计编译 3-6 条二元 eval 规则，由程序化 + judge-LLM 引擎评估）、validation 门控（SkillEvo 仅当候选在 promotion_test 上击败当前冠军时才晋升）、AutoSkill4Doc 生命周期门控（candidate->draft->evaluating->active->watchlist->deprecated->retired）。无多模型辩论，主循环中无基于执行的运行时测试。论文本身未报告下游任务准确率验证。",
+  "error_correction": "自我修订（LLM 合并经语义并集重写整个技能，移除陈旧/案例特定的内容）、回滚（POST /skills/{id}/rollback + version_history + AutoSkill4Doc 暂存的中间快照用于崩溃恢复）、有界编辑（合并保持技能身份与重要检查以避免回归）、discard（直接拒绝通用/低信号/不可移植的候选）、重规划（query 重写与合并重新框定技能）。无定向 diff 修补；编辑是整文档重新生成。",
+
+  "test_env": "真实生产力任务 / 通用。实证研究在 WildChat-1M（真实 ChatGPT 交互日志，>8 轮的对话）上跨 4 个子集（中文/英文 x GPT-3.5/GPT-4）进行。AutoSkill4OpenClaw 在真实 OpenClaw agent 轨迹上运行。观测到的领域：编程、写作、data/AI-ML、咨询/心理学、化学（AutoSkill4Doc）。StuLife benchmark 作为相关 ELL 工作被引用，但 AutoSkill 未在 StuLife 上评估。是否使用了任何标准化 agent benchmark（如 AgentBench）为 [uncertain]。",
+  "backbone_model": "以开源 LLM 为主：demo 中使用 InternLM Intern-S1-Pro 与 DashScope Qwen（qwen-plus）；也支持 GLM（Zhipu/BigModel）、OpenAI GPT、Anthropic Claude 与通用 OpenAI 兼容后端。Embedding：DashScope text-embedding-v4、通用 embd_qwen3vl8b 或 hashing（mock）。Optimizer/target 分离存在于 SkillEvo（通过 --llm-provider/--llm-model 与 --judge-provider/--judge-model 分离 mutation LLM 与 judge LLM），概念上也存在于 AutoSkill（不同模块可共享一个 backbone 或使用不同的）。默认所有模块为同一 backbone LLM，仅以 prompt 区分。",
+  "where_deploy": "general（横跨编程、写作、咨询、办公文档、社媒文案的模型无关个性化层）。AutoSkill4Doc 通过可配置分类法增加 specialized 文档领域（心理学/CBT、化学/分析化学）。主要定位是面向 LLM 助手与个人数字替身的 general 终身个性化层。",
+
+  "metrics": "SkillBank 统计（跨 4 个 WildChat 子集提取 1858 个技能；各子集的对话/消息/技能计数）、skill_library_growth（version 字段作为迭代精炼信号，如 v0.1.34 = 34 轮合并）、泛化（跨语言中文/英文、跨模型 GPT-3.5/GPT-4 提取）、tag/category 分布（SKILL.md YAML 标签上的绝对频次）、平台提及计数。SkillEvo 增加对冠军的晋升成功率与二元 eval 规则通过率。cost（API/token 成本）与经济价值捕获未在论文中定量报告。无下游任务 success_rate 或准确率数字。cost 与下游成功指标为 [uncertain]。",
+  "key_results": "(1) 从 WildChat-1M 提取 1858 个技能（中文 GPT-3.5：400 技能/5912 对话；英文 GPT-3.5：631/10243；中文 GPT-4：224/1145；英文 GPT-4：603/5211）。(2) Version 字段展示持续精炼：professional_text_rewrite 达到 v0.1.34（34 次增量合并），而 顶级心理咨询师 停留在 v0.1.0，表明技能依反馈频率以不同速率进化。(3) 归一化后 top 标签：python(98)、javascript(38)、excel(36)、c++(35)、creative writing(35)；category 分布以 Programming(482) + Writing(363) + Data/AI-ML(354) 为主。(4) 同一 SKILL.md 格式既捕获软性互动行为（咨询人设），也捕获刚性任务流程（文本重写）。注意：论文是系统 + 数据集分析附带案例研究；未报告相对基线的定量下游任务准确率或成功率提升。任何正面交锋的 benchmark 收益为 [uncertain]。",
+
+  "limitations": "doc_bloat（合并累积内容；仅由合并期去重缓解，无硬 token 预算）、regression_risk（尽管有「避免回归」指令，LLM 合并仍可能丢弃重要约束；仅 SkillEvo 的留出门控守护这一点，而非主 AutoSkill 循环）、controllability / optimizer_quality（提取与合并质量完全依赖底层 LLM 与 prompt；弱模型产出噪声技能）、scalability（技能库随用户/会话增长；清理是简单的 retrieved>=40 && used<=0 启发式，非学习所得）、transferability（跨模型/跨语言在提取上得到验证，但跨模型的检索/注入质量未被 benchmark）、eval-hacking（若 promotion_test 泄漏则可能在 SkillEvo 中发生；由冻结划分缓解但未正式分析）。catastrophic_forgetting 为 N/A（无参数更新）。论文明确缺乏定量下游任务评估。",
+
+  "takeaways": [
+    "Discard 优先的提取策略（anti-noise 门控）：AutoSkill 仅当用户表达持久的约束/偏好/纠正（如「避免幻觉」、机构写作风格）时才提取技能，并对「写一份报告」这类通用一次性请求显式返回空结果。这是保持自进化 SKILL.md 库整洁的最具可操作性的设计：以持久的、可复用的信号门控提取，并默认 no-op。结合仅用户侧证据（从用户 query 提取，绝不从模型响应提取），这产生了干净的学习信号。",
+    "基于局部证据的检索辅助维护（可扩展性）：AutoSkill 不把整个技能库喂给 judge/merger，而是先检索 top-M 最相似的现有技能，并仅对单一最近邻做出 add/merge/discard 决策。这使维护近似 O(log N) 且聚焦，避免全库推理的成本与 context 膨胀。对自进化 SKILL.md 系统，这是正确的扩展范式：维护决策是局部的。",
+    "版本化语义并集合并（无重复的持续精炼）：合并时，merger LLM 执行语义并集（非拼接），保持技能身份/UUID，对区段/要点/triggers/tags/examples 去重，剥离案例特定实体，保留先前的重要检查以避免回归，并递增语义补丁版本（v0.1.0 -> v0.1.1 ... 观测到最高 v0.1.34）。这让同一技能持续精炼而非繁殖重复碎片。将其与留出晋升门控（SkillEvo：在 dev 上变异，仅当在留出划分上击败冠军时才晋升）配合，使迭代式 SKILL.md 进化既不重复也不回归。"
+  ],
+
+  "uncertain": [
+    "type（真正的 academic+industry 混合；被迫单标签）",
+    "cross_transfer（跨基准 / cross-benchmark 迁移未被评估）",
+    "test_env（未确认使用如 AgentBench 的标准化 agent benchmark；StuLife 是相关工作，非 AutoSkill 评估对象）",
+    "metrics（论文未报告 cost/token 经济性与下游任务 success_rate/准确率）",
+    "key_results（无相对基线的正面交锋定量收益；论文仅报告 SkillBank 统计与案例研究）",
+    "learning_paradigm（on-policy 与 off-policy 边界模糊，因为离线提取复用了可能来自不同模型的历史日志）"
+  ]
+}

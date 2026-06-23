@@ -1,0 +1,60 @@
+{
+  "name": "SkillOpt",
+  "institution": "Microsoft（主导）；合作作者来自 Shanghai Jiao Tong University、Tongji University、Fudan University",
+  "release_date": "arXiv v1 2026-05-22；v2 2026-05-25",
+  "paper_link": "https://arxiv.org/abs/2605.23904",
+  "code_link": "https://aka.ms/SkillOpt（论文）。镜像于 https://github.com/microsoft/SkillOpt 及 PyPI 包 `skillopt`，见 task note [uncertain: GitHub/PyPI 链接未直接验证，aka.ms 短链为论文中的权威引用]",
+  "type": "academic",
+
+  "what_evolved": "Context记忆与提示。技能文档（一段注入 agent context 的自然语言策略）被视为冻结目标模型的「可训练外部状态」。模型权重、harness 与评估器全部固定；仅优化单一技能文档。",
+  "skill_as_artifact": "是。部署产物是单一可移植的 best_skill.md 文件（约 300-2000 tokens，中位数 ~920，六个基准上范围 379-1995）。在 harness 模式下它被渲染为与任务文件并列的 per-task SKILL.md。它是可审计、可检查的文本，可跨模型/harness 复用而无需改动权重。",
+  "skill_as_doc": "是。核心载体是可读的 markdown 指令文档（best_skill.md）。不向目标交付任何代码或向量；optimizer 侧的 meta_skill 仅限 teacher 使用、不部署。",
+
+  "skill_encoding": "技能文档 (.md / SKILL.md)。单一自然语言技能文档封装了流程、领域启发式、工具策略、输出约束与失败模式。包含一个由 SLOW_UPDATE_START / SLOW_UPDATE_END 标记界定的受保护 slow-update 区段。",
+  "skill_granularity": "策略规则 + 完整技能包。单一紧凑的过程化技能（领域级规则，而非原子动作或实例级修补）。规则是过程化/可泛化的（如答案格式约束、证据绑定、搜索前沿纪律）。",
+
+  "doc_form": "纯指令 markdown 文档（best_skill.md），非 YAML-frontmatter 结构化。结构上有一个常规可编辑正文，外加一个由 SLOW_UPDATE_START / SLOW_UPDATE_END 界定的受保护 slow-update 块，仅 epoch 边界的 slow-update 流程可改写。典型长度 300-2000 tokens（观测值 379-1995；中位数 ~920）。最终技能相比初始的一行/一段文字仅增长 x2.5-x5.3，并保持在典型 system-prompt 预算之下。不向目标交付内嵌可执行代码块。",
+  "edit_granularity": "在文本学习率预算下的有界 add/delete/replace 编辑。Patch 模式将每次更新限制为四种原子操作：append、insert_after、replace、delete（局部化操作，minimal-diff 风格）。另一种 rewrite_from_suggestions 模式基于选中的建议对技能进行整体重写。每步 optimizer 对合并后的编辑池排序并截断到前 L_t 条（默认 L_t=4，cosine 衰减至下限 2）。step 级编辑不能覆写受保护的 slow-update 字段。不支持 skill+tool 的 bundle 联合编辑（工具/harness 固定）。",
+  "version_gating": "留出验证门控（strict-improvement）：候选技能在互斥的选择集 D_sel 上用冻结目标模型评估，仅当严格超过当前选择分时才被接受（平局拒绝）。最优技能以 best_skill.md 跟踪；以技能 hash 为键的选择分缓存防止重复评估。这是 propose-and-test 选择，而非 git-branch/Pareto-front/DAG。epoch 级 slow/meta 更新候选同样过该门控。",
+  "doc_provenance": "混合：由人工或一行文字初始化技能，随后基于带分的 rollout 轨迹（成功轨迹归纳 + 失败轨迹蒸馏，经 optimizer 模型）进行 LLM 驱动的迭代优化。本质上是离线 benchmark 训练：部署制品由在 train/selection/test 划分上的系统性训练循环产出，而非一次性生成或社区共享。",
+  "cross_transfer": "强，沿三条轴线得到明确验证：(1) 跨模型（在 GPT-5.4 上训练的 SpreadsheetBench 技能提升所有更小的 GPT 变体；LiveMath 技能从 GPT-5.4 迁移到 mini/nano）；(2) 跨 agent harness Codex <-> Claude Code（如 Codex 训练的 SpreadsheetBench 技能迁移到 Claude Code 达 +59.7pt；Claude Code 训练的迁移到 Codex 在 SpreadsheetBench 上 +43.6pt）；(3) 跨基准（OlympiadBench 技能在 Omni-MATH 上为 GPT-5.4/mini/nano 带来正向收益）。每一行迁移均为正（无一低于目标 no-skill 基线）。",
+  "library_governance": "单技能设计（无不断增长的技能库，无 Lotka-Volterra/retirement/archive）。膨胀由以下方式控制：(a) 文本学习率/编辑预算限制每步编辑数；(b) 分层合并在排序前过滤重复、矛盾与样本特定的提案；(c) 紧凑性约束保证最终制品 <2000 tokens；(d) 仅严格改进的编辑存活进 best_skill.md。无基于相似度检索的编辑定向，也无 curator loop。",
+  "failure_memory": "是。一个 epoch 局部的 rejected-edit buffer 记录观察到的失败模式，并对于被拒绝的步骤，记录尝试过的编辑及其造成的掉分。同一 epoch 中后续的 reflection/merge/ranking 调用会接收该 buffer，使 optimizer 避免重复失败编辑并聚焦于未解决的失败。在训练中充当显式负反馈（anti-pattern memory），且不增加推理期成本。",
+  "safety_guardrails": "(1) 范围边界：仅编辑技能 .md；目标模型权重、harness、后端与 benchmark 评估器固定；源码与工具从不触碰。(2) 有界编辑：文本学习率预算防止破坏性的整文档重写并保持连续性。(3) 留出验证门控：看似合理实则有害的文本诊断因无法提升 D_sel 而被拒绝，缓解 eval-hacking/过拟合。(4) 受保护的 slow-update 区段对所有 step 级 prompt 禁入。(5) 哈希化的选择缓存避免重复运行相同候选。(6) 严格改进（平局拒绝）门控。(7) best_skill.md 在拒绝中被保留（隐式回滚：被拒候选不会替换 current/best）。无显式的编辑前备份文件或人工在环确认（全自动）。未提及密钥/注入检查。",
+  "coevolution": "主要是 skill-only（单一可移植技能是唯一进化的部署对象）。此外，optimizer 侧的 meta_skill 作为 teacher-only 指导协同进化：它汇总跨 epoch 哪些编辑模式有效/被拒/留存，并前置于未来的 optimizer prompt（reflection/merging/ranking），但不交付给目标模型。这是 optimizer 侧松散的 skill-prompt 联合进化。留出门控充当固定验证器（不协同进化）。无 skill-tool 或 skill-skill 生态进化。",
+
+  "how_method": "rollout_optimization（非梯度、文本空间优化），镜像 SGD。循环为：前向 = 用当前技能做 rollout 批次；反向 = 在成功/失败上做 minibatch 反思，产出结构化 add/delete/replace 编辑；在文本学习率调度下做有界更新；留出验证门控仅接受严格改进；rejected-edit buffer 作为负反馈；epoch 级 slow/meta 更新作为动量类比。也属 reward-based，因为留出分即选择信号。optimizer 模型与冻结目标模型相互分离。",
+  "learning_signal_source": "留出验证分（主选择信号）+ 来自 benchmark 原生评估器的带分 rollout 轨迹（成功/失败）。optimizer 还消费轨迹元数据、消息、工具调用、观测、命令输出、最终答案与验证器反馈（如 Codex harness 中的 codex_trace_summary.txt）。",
+  "reward_granularity": "outcome。每条轨迹一个标量任务级分数 r(s)∈[0,1]（benchmark 原生硬成功 / exact-match 准确率）。无密集 process reward；过程化信号来自跨 outcome 打分 rollout 的 minibatch 聚合。",
+  "learning_paradigm": "离线、sleep-time（训练在部署前完成，部署时零推理期 optimizer 调用）。rollout 相对当前技能为 on-policy（冻结目标用当前技能执行）。优化后的 best_skill.md 随后原样部署。",
+
+  "when_evolve": "sleep-time / inter-test-time 离线。所有优化在部署前离线地在 train/selection 划分上完成。推理期目标模型仅消费固定的 best_skill.md，无 optimizer 调用、无权重更新、无在线编辑。",
+  "trigger": "由离线 benchmark 训练驱动的 epoch 周期性触发（默认 4 个 epoch）。每个 epoch 重置 rejected-edit buffer，将训练划分打乱为 rollout 批次，并运行 step 级优化直至 epoch 结束，此时触发 slow/meta 更新。在部署的 agent 中并非事件/失败/课程/cron 驱动；该循环被显式启动以针对目标领域训练一个技能。",
+
+  "library_structure": "每个目标域单一技能文件（best_skill.md）。在 tool-use harness 中同一文件被渲染为工作区里的 per-task SKILL.md。无技能库 / 向量库 / 图谱 / DAG / 云端注册中心；SkillOpt 有意优化单一可移植技能，而非扩充仓库。",
+  "retrieval_method": "常驻注入而非检索：在 direct chat 中技能被前置到 system/developer 指令；在 harness 中被渲染为持久化过程记忆 / SKILL.md。无语义相似度检索、BM25 或 description 触发加载（每域单技能，始终加载）。",
+
+  "validation": "留出评估 + 验证门控 + 功能正确性检查。每个候选技能在互斥选择集 D_sel 上用冻结目标模型与 harness、以 benchmark 原生评估器（硬成功 / exact-match）打分。当未声明 benchmark 特定划分时默认 2:1:7（train:selection:test）（split_seed=42）。头条数字仅在互斥的留出 test 划分上报告，衡量泛化而非验证拟合。",
+  "error_correction": "经反思的自我修订 + 有界 patch 编辑 + 隐式回滚。失败/被拒候选不被应用（保留 best/current 技能）；其编辑与失败模式进入 rejected-edit buffer 以备将来规避。Patch 模式执行定向 diff 修补（append/insert_after/replace/delete）。每个 minibatch 至多三轮 teacher refinement。重规划通过 epoch 级 slow/meta 更新实现，跨 epoch 重新排定编辑方向优先级。",
+
+  "test_env": "通用 / 技能 benchmark 套件：SearchQA（抽取式 QA）、SpreadsheetBench（表格代码/工具操作，多轮 codegen 最多 30 轮，真实 openpyxl/pandas 运行时）、OfficeQA（多轮工具循环最多 24 次工具调用）、DocVQA（多模态文档 VQA）、LiveMathematicianBench（数学 MCQ）、ALFWorld（持久化具身交互最多 50 步）。还包括 SkillsBench 风格的通用 agent 技能，以及真实 coding-agent harness（Codex CLI、Claude Code CLI）。",
+  "backbone_model": "目标（冻结学生）模型：GPT-5.5、GPT-5.4、GPT-5.4-mini、GPT-5.4-nano、GPT-5.2、Qwen3.5-4B、Qwen3.6-35B-A3B。Optimizer（teacher）模型：一个前沿模型（默认 GPT-5.5；消融也用与目标匹配的 optimizer）。Optimizer/target 显式分离。teacher 与 student 调用默认 medium reasoning effort。",
+  "where_deploy": "general。同一 optimizer 接口横跨 QA、表格、文档、多模态 QA、数学与具身决策，并横跨 direct-chat、Codex 与 Claude Code 执行模式。过程化 benchmark（表格、office QA、数学）收益最大。",
+
+  "metrics": "success_rate（留出 test 上的 benchmark 原生硬分 / exact-match 准确率）；泛化（跨模型、跨 harness、跨基准迁移，每一行迁移均为正）；样本/编辑效率（仅 1-4 条被接受编辑写入 best_skill.md，中位数 2.5）；成本（每绝对 test-point 的训练 token：廉价过程化 benchmark 0.6M-3.6M/pt，多模态/长轨迹 benchmark 高达 46.4M/pt；一次性总训练成本）；紧凑度（300-2000 部署 token）。技能库增长不是指标（单技能设计）。",
+  "key_results": "在覆盖 6 个 benchmark、7 个目标模型、3 个 harness 的全部 52 个（模型, benchmark, harness）评估单元上 best-or-tied。在 GPT-5.5 上：将平均 no-skill 准确率提升 +23.5pt（direct chat，58.8->82.3）、+24.8pt（Codex）、+19.1pt（Claude Code）。相对 human/one-shot LLM/Trace2Skill/TextGrad/GEPA/EvoSkill 中每个单元的最强基线，平均领先 +5.4pt（direct chat）、相对 EvoSkill +14.0pt（Codex）、+3.2pt（Claude Code）。GPT-5.5 direct chat 各基准亮点：SpreadsheetBench 41.8->80.7（+38.9）、OfficeQA 33.1->72.1（+39.0）、LiveMath 37.6->66.9（+29.3，来自单条被接受编辑）、ALFWorld 83.6->95.5（+11.9）。平均每模型提升 ~+17.6pt；小模型相对收益最大（GPT-5.4-nano 在 DocVQA 上近翻倍、在 ALFWorld 上翻三倍；Qwen3.5-4B ALFWorld 30.6->81.3）。跨 harness 迁移：Codex->Claude Code SpreadsheetBench +59.7pt；Claude Code->Codex SpreadsheetBench +43.6pt。跨基准：OlympiadBench 技能在 Omni-MATH 上为正（+1.3 至 +3.7pt）。",
+
+  "limitations": "来自附录 B：(1) 可扩展性/反馈依赖——循环依赖带分轨迹与留出选择集，故最适用于具备自动验证器、exact-match 指标、可执行检查或可靠反馈的任务；开放/主观/多维/评判成本高的领域可能需要在门控中使用更强的人工或基于模型的评估。(2) 训练成本——尽管部署制品只是一个紧凑的 best_skill.md、推理期零成本，训练仍需额外 rollout 计算与 optimizer 模型调用；仅在技能被复用时摊销，对一次性任务吸引力较低。(3) 单技能范围——有意优化单一可移植技能，而非扩充技能库或改权重；对需要许多互斥过程的高度异构领域不足。(4) 回归/迁移风险——优化后的技能可能编码训练分布的领域特定启发式，故在迁移到显著不同的模型/harness/任务前需谨慎的留出评估。隐含风险：eval-hacking（由留出门控缓解）、doc_bloat（由编辑预算缓解）、optimizer_quality 依赖（消融显示与目标匹配的 optimizer 能恢复大部分收益）。",
+
+  "takeaways": [
+    "1. 把 SKILL.md 当作冻结 agent 的可训练「外部状态」，并引入完整的深度学习纪律：rollout/reflection 的 batch size 控制证据噪声、带调度的文本学习率（编辑预算）控制步长、留出选择集充当验证集、epoch 级 slow/meta 更新充当动量项。这把 ad-hoc 的 prompt 修订变成可复现的优化过程，也是 SkillOpt 稳定、胜过不受控自我重写的核心原因。",
+    "2. 采用严格留出验证门控（仅当严格更优时接受；平局拒绝）外加一个记录失败编辑及其掉分的 rejected-edit buffer。这把 optimizer 转化为 propose-and-test 搜索：看似合理实则有害的文本诊断被滤除、失败成为后续步骤的负反馈、部署制品保持紧凑（仅 1-4 条编辑存活进 best_skill.md），而非累积每一条反思。这直接应对 eval-hacking、doc-bloat 与回归风险。",
+    "3. 将 optimizer（强前沿 teacher 模型）与冻结目标学生分离，把 optimizer 侧 meta_skill 保持在 teacher-only，仅交付一个紧凑的 best_skill.md。在 train/selection 划分上离线训练一次，再以零推理期 optimizer 调用部署；由此产生的可审计文本制品可跨模型规模、跨 Codex/Claude Code harness、并迁移到邻近 benchmark，而无需任何权重更新——使其成为闭源前沿模型的实用领域自适应层。"
+  ],
+
+  "uncertain": [
+    "code_link（GitHub microsoft/SkillOpt 与 PyPI skillopt 无法直接抓取/验证；论文仅引用 aka.ms/SkillOpt 短链）",
+    "doc_form（未明确提及 YAML frontmatter；假定为带界定受保护 slow-update 区段的纯自然语言 markdown）",
+    "safety_guardrails（未明确提及编辑前文件备份、密钥/注入扫描或人工在环门控；推断为全自动）"
+  ]
+}

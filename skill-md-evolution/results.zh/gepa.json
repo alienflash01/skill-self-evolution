@@ -1,0 +1,56 @@
+{
+  "name": "GEPA (Genetic-Pareto)",
+  "institution": "UC Berkeley、Stanford、BespokeLabs.ai、Notre Dame、Databricks、MIT（Agrawal、Tan、Soylu、Ziems、Khare、Opsahl-Ong、Singhvi、Shandilya、Ryan、Jiang、Potts、Sen、Dimakis、Stoica、Klein、Zaharia、Khattab）",
+  "release_date": "2025；以 conference paper 发表于 ICLR 2026",
+  "paper_link": "https://openreview.net/pdf?id=RQm2KQTM5r",
+  "code_link": "https://github.com/gepa-ai/gepa",
+  "type": "academic",
+
+  "what_evolved": "Context记忆与提示。GEPA 仅进化复合 AI 系统 Phi=(M,C,X,Y) 的模块提示集合 Pi_Phi；底层 LLM 权重 Theta_Phi 保持冻结。每个语言模块 M_i=(pi_i, theta_i, X_i, Y_i) 的系统提示 pi_i（指令 + 可选 few-shot 示范）被变异；控制流 C 与工具 API 不被触碰。",
+  "skill_as_artifact": "是。每个候选提示都是一个独立、可复用的文本制品（一个完整实例化的 <Pi, Theta_frozen> 系统版本），存放在候选池 P 中并带有显式血缘记录（父-子边构成遗传树/DAG）。候选项被序列化、比较并作为一等对象进行重组。",
+  "skill_as_doc": "是。优化后的制品本质上是一份人类可读的自然语言指令文档（声明式规则、目的/上下文、分步策略、输出格式——见图 2）。提示自身不内嵌可执行代码；该「技能」完全以类 markdown 指令文本的形式喂给 LLM 模块。",
+
+  "skill_encoding": "自然语言 SOP 编码为系统提示（声明式指令 + 可选 few-shot 示范）。GEPA 学到的提示是丰富的声明式文档：输入理解、目的/上下文、关键观察与经验教训、构建策略、输出规范（图 2）。不是代码、不是向量、不是图谱——每个模块都是纯指令文本。",
+  "skill_granularity": "子任务 workflow + 策略规则。粒度为复合 AI 系统中的模块级：每个模块的提示是一条子任务 workflow 指令（如第二跳查询生成、答案抽取）。进化出的内容编码高层声明式策略规则/经验（如「第一跳文档通常覆盖单一实体；目标是缺失的关联文档」），而非原子动作。",
+
+  "doc_form": "纯指令文档（声明式自然语言指令，无 YAML frontmatter，无内嵌可执行代码块）。典型长度：种子提示为 1-2 行（约 30 tokens）；GEPA 进化后的提示增长为数百到约 1k+ tokens 的结构化散文，含若干区段（Input Understanding、Purpose/Context、Key Observations/Lessons、How-to-Build、Output）。形式为每个模块一整块扁平的指令，而非多文件包。",
+  "edit_granularity": "每个模块每次变异为整文档重写（reflection LM 输出一个完整修订后的提示 pi_i，而非 patch/diff）。两种提案策略：(1) Reflective Prompt Mutation——单亲重写并累积经验；(2) System-Aware Merge（GEPA+Merge）——遗传交叉，合并来自两个祖先的互补模块级提示（一种跨模块的 bundle-like 联合编辑）。无 minimal-diff/PATCH 编辑。",
+  "version_gating": "Pareto 前沿 + 留出验证门控。多级门控：(a) 先做 minibatch 评估；仅当分数超过父代时，(b) 再做完整 D_pareto 验证评估；仅当候选有改进时才加入池 P。下一次变异的选择采用 Pareto 前沿过滤（保留在 >=1 个任务实例上最优的候选，剪除严格被支配者），并以 #tasks-led 为权重的随机采样。血缘 DAG 记录谱系；Merge 跳过直系血缘与已尝试过的配对。",
+  "doc_provenance": "由执行 + 评估轨迹经 LLM 迭代生成。来源信号：(1) 人工初始化的种子提示（简单基线）；(2) rollout 执行轨迹（模块输入/输出/推理）；(3) 评估轨迹（编译错误、失败的 rubric 项、经反馈函数 mu_f 的人工评分解释）；(4) LLM 的反思式归因。非一次性生成——而是从众多失败/成功轨迹中迭代蒸馏而来。",
+  "cross_transfer": "跨模型 + 跨基准。跨模型迁移强：在弱模型 Qwen3-8B 上优化的提示（'GEPA-Qwen-Opt'）原样在 GPT-4.1-Mini 上评估时获得 +9pp，击败直接在 GPT-4.1-Mini 上优化的基线。跨基准：同一 optimizer 应用于 6 个多样的基准（AIME-2025、LiveBench-Math、HotpotQA、IFBench、HoVer、PUPA）。推理期搜索内的跨任务迁移（一个 kernel 问题的经验应用到其他问题）。",
+  "library_governance": "Pareto 剪枝 = 被支配候选的退役（类似于按实例的 Lotka-Volterra 适者生存）；血缘 DAG 防止冗余的 Merge 尝试（血缘条件跳过直系血缘与先前尝试过的配对）；无显式的基于相似度的去重、无分层索引、无 curator loop。池规模由 Pareto 支配剪枝隐式约束。",
+  "failure_memory": "是，强烈。失败信号是一等公民：执行轨迹（失败的推理/工具调用）与评估轨迹（编译错误、失败的 rubric 项、人工评分的理由）被 mu_f 捕获为 feedback_text，并喂入 reflection meta-prompt 以做显式信用归因。候选自身的血缘累积经验。被拒绝的候选（在 minibatch 上未超过父代）被丢弃——它们不会喂入持久的 anti-pattern buffer，但其轨迹为下一次 reflection 提供信息。",
+  "safety_guardrails": "通过两阶段验证门控（minibatch -> 完整 D_pareto）实现有界编辑，确保仅超过父代的改进被提交；留出验证集（验证实例内容对 optimizer 不可见）；预算上限 B 约束总 rollout 数；范围限于提示（权重、控制流、工具源码不被触碰）；对抗/探测模式通过奖励反转实现（PUPA/AIME 对抗搜索）。无显式人工在环、无编辑前备份/回滚、未记录 eval-hacking 防御（系统原则上可能过拟合验证集的特殊性——图 15 分析了泛化差距）。",
+  "coevolution": "skill-prompt 联合（一个复合 AI 系统内的多模块联合提示进化）。GEPA 同时进化全部 |M| 个模块的提示（轮询式模块选择），System-Aware Merge 对来自不同祖先的模块提示做交叉。Generator-verifier 风格：reflection LM 充当目标系统的 meta-optimizer。非 skill-tool 协同进化（工具冻结），非 skill-skill 生态（单一系统，无独立技能库）。",
+
+  "how_method": "rollout_optimization（文本空间、非梯度）与 population_evolutionary（遗传算法：变异 + 交叉 + Pareto 选择）以及 reward-based 文本反馈相结合。具体地：(1) Reflective Prompt Mutation = 利用来自 rollout 的自然语言反馈做 LLM reflect-and-refine；(2) System-Aware Merge = 对 Pareto 最优祖先做遗传交叉；(3) 基于 Pareto 的「illumination」候选选择（quality-diversity，参见 Mouret & Clune 2015）。无梯度更新、无 SFT、无 RL 策略梯度——学习完全发生在语言空间。",
+  "learning_signal_source": "成败轨迹（推理/工具调用的执行轨迹）+ 评估轨迹（经 mu_f 的编译/rubric/人工评分反馈）+ 留出验证分（D_pareto 留出分）+ LLM-as-judge（reflection LM 归因信用并提出更新）。辅助信号：可用时每个实例附人工撰写的解释。",
+  "reward_granularity": "hybrid。Outcome：用于选择的标量指标 mu（exact match / F1 / pass rate）。Process：来自 mu_f 的文本 feedback_text（编译错误、rubric 失败、多跳中的模块级反馈），用于反思式学习。",
+  "learning_paradigm": "offline + on-policy。优化是部署前在 D_train 上的离线 sleep-time 阶段（inter-test-time）。采样相对当前候选为 on-policy（rollout 从正被变异的候选中抽取）。存在一个在线推理期搜索的变体（D_val = D_train，过拟合目标任务）。",
+
+  "when_evolve": "inter-test-time（部署前在 D_train 上的离线优化循环，受 rollout 预算 B 约束）。次要模式：推理期搜索（查询时按任务过拟合，用于 NPUEval/KernelBench 上的代码优化）。非 intra-test-time 的单任务执行期在线适配。",
+  "trigger": "周期性 / budget-driven 迭代（循环持续「While Budget > 0」）。无事件/失败/课程触发；optimizer 运行至预算耗尽。当池中存在两个共享共同祖先、互补的 Pareto 最优候选时，条件性触发 Merge。",
+
+  "library_structure": "候选池 P = 带血缘 DAG 的 Pareto 前沿。每个节点 = 一个具体的 <Pi, Theta_frozen> 实例化，带父边与每任务分数矩阵（行=候选，列=任务实例）。过滤后的池仅保留非支配候选。无向量库、无分层索引、无云端注册中心、无 git 分支——内存中的遗传树。",
+  "retrieval_method": "基于 Pareto 的随机采样：从过滤后（非支配）的池中，按其领先的任务实例数为权重采样候选。对变异目标模块：轮询策略。对 Merge：采样 2 个具有有效血缘的不同候选。非语义相似度、非 BM25——按任务覆盖度加权的采样。",
+
+  "validation": "基于执行（rollout 由 mu 打分）+ 留出评估（D_pareto 留出验证集，内容对 optimizer 不可见）+ 验证门控（两阶段：minibatch 后完整 D_pareto；仅当有改进才提交）+ 功能正确性（每个基准的 exact match / F1 / pass rate）。reflection LM 充当代理验证器，提出属性级信用归因。",
+  "error_correction": "有界编辑（经 minibatch 门控提交的有界编辑）+ 定向 diff 修补（reflection LM 输出定向修订，将失败归因到具体提示元素）+ 回滚（被拒候选直接丢弃，保留父代）。除提出新子代外，无对已提交候选的显式自我修订；遗传结构本身就是纠错记忆。",
+
+  "test_env": "通用 NLP reasoning + coding。六个基准：多跳 QA（HotpotQA）、数学（AIME-2025、LiveBench-Math）、指令遵循（IFBench）、隐私感知委派（PUPA）、检索增强验证（HoVer）。作为推理期搜索扩展到 coding（NPUEval AMD NPU kernel、KernelBench CUDA kernel）。在 AIME-2025 上的对抗提示搜索。",
+  "backbone_model": "开源 LLM（Qwen3-8B）与专有 GPT-4.1 Mini 作为 TARGET 系统骨干（权重冻结）。optimizer/target 分离：一个 reflection LM（同族、通常更强）充当提出提示变异的 meta-optimizer。推理期搜索使用 GPT-4o。对抗探测使用 GPT-5 Mini。无 VLM。",
+  "where_deploy": "general（通用复合 AI workflow：QA、数学、指令遵循、验证、隐私委派、代码生成）。非专门面向单一领域。",
+
+  "metrics": "success_rate（每基准测试集分数）+ sample_efficiency（达到 GRPO 最佳验证所需的 rollout；仅训练 rollout）+ 泛化（留出测试集，跨模型 GEPA-Qwen-Opt -> GPT-4.1-Mini）+ 成本（附录 G.3 报告的金钱成本）+ generalization_gap（验证-测试差，图 15）。",
+  "key_results": "在 Qwen3-8B 上，GEPA 以平均 +6pp、最高 +19pp 击败 GRPO（24k rollout），且最多使用 35 倍更少的 rollout（达到最优测试性能少 4-35 倍）；以 78 倍更高的样本效率匹配 GRPO 的最佳验证（仅需 243-1179 个 rollout）。聚合上击败 MIPROv2 +13pp（对比 MIPROv2 的 +5.6pp），在 AIME-2025 上 +12pp。在 GPT-4.1-Mini 上，击败 TextGrad（+12.19pp 对 +6.11pp）、Trace/OptoPrime、MIPROv2。跨模型：Qwen 优化的提示在 GPT-4.1-Mini 上获 +9pp。Pareto 选择击败 SelectBestCandidate +6.4pp、击败 BeamSearch +7.33pp（表 3）。推理期搜索：NPUEval 平均向量利用率 4.25% -> 30.52%；KernelBench 超越 PyTorch 的 CUDA 从约 0% 提升到 >20%。",
+
+  "limitations": "optimizer_quality（依赖强 reflection LM 提出好的变异；更弱的 optimizer 会退化）。regression_risk（在 AIME-2025 上用 Qwen3-8B 时，GEPA 不及 GRPO；IFBench 上 GEPA+Merge 相对 GEPA 出现回归）。scalability（多数 rollout 预算花在验证/选择而非学习上——仅训练 rollout 为 79-737，但完整 pipeline 需要数千）。doc_bloat（进化后的提示变长；无压缩）。transferability（强但在任务/模型间有差异）。controllability（无人工在环；无显式 eval-hacking 防御——提示可能过拟合验证集的特殊性，尽管泛化差距很小）。",
+
+  "takeaways": [
+    "Pareto 前沿版本管理胜过贪婪爬山：维护一个非支配候选 SKILL.md 版本的池（每个至少在某一任务实例 / 用户 / 场景上最优），而非始终编辑单一全局最优。按覆盖度为权重随机采样下一次变异目标。这逃离了困住 TextGrad 式贪婪单最优编辑的局部最优——GEPA 显示相对 SelectBestCandidate +6.4pp、相对 BeamSearch +7.33pp。对 SKILL.md 自我进化：保留多份竞争草稿，仅剪除严格被支配者，让多样场景保留多样的胜者存活。",
+    "用执行 + 评估双轨迹做 reflect-and-refine：喂给 meta-prompt 的不仅是（当前提示、标量分数），而是完整序列化轨迹（agent 的推理、工具调用、工具输出）以及评估轨迹（编译错误、失败的 rubric 项、人工评分理由），作为 feedback_text。reflection LM 执行隐式信用归因并输出整文档重写。这比标量奖励 RL 的样本效率高得多（比 GRPO 少 4-35 倍 rollout），因为语言是比稀疏标量梯度更丰富的学习介质。对 SKILL.md：记录执行轨迹 + 结构化评估反馈，让 LLM 提出归因到具体失败模式的完整重写。",
+    "两阶段留出验证门控作为廉价安全保障：每个提案编辑先在 minibatch 上评估，仅当它在留出 D_pareto 验证集（内容对 optimizer 不可见）上超过父代时才晋升入候选池。这在无需人工审查的情况下约束回归风险——被拒编辑直接丢弃，保留父代。配合硬 rollout/时间预算 B 以防失控。对 SKILL.md：保留一个自我编辑器读不到的留出评估集，每次提交都在其上做门控，在子代可证明胜出之前绝不覆写父代。"
+  ],
+
+  "uncertain": []
+}

@@ -1,0 +1,52 @@
+{
+  "name": "Reflexion / Self-Refine",
+  "institution": "Reflexion: Northeastern University (Shinn, Cassano, Berman), MIT (Gopinath), Princeton University (Narasimhan, Yao)。Self-Refine: Carnegie Mellon University (Madaan, Gupta, Gao, Alon, Yang), Allen Institute for AI (Tandon, Wiegreffe, Dziri, Gupta, Clark), University of Washington (Hallinan, Welleck), NVIDIA (Prabhumoye), UC San Diego (Majumder), Google DeepMind (Hermann, Yazdanbakhsh)。",
+  "release_date": "Reflexion: arXiv v1 2023-03-20, v4 2023-10-10, NeurIPS 2023。Self-Refine: arXiv v1 2023-03-30, v2 2023-05-25, NeurIPS 2023。",
+  "paper_link": "Reflexion: https://arxiv.org/abs/2303.11366 ; Self-Refine: https://arxiv.org/abs/2303.17651",
+  "code_link": "Reflexion: https://github.com/noahshinn/reflexion ; Self-Refine: https://github.com/madaan/self-refine（demo: https://selfrefine.info/）",
+  "type": "academic",
+
+  "what_evolved": "Context 记忆与提示。两种方法均不更新模型权重、工具或架构。Reflexion 进化一个由 NL 反思构成的 episodic memory buffer（基于记忆的 verbal RL）。Self-Refine 迭代地精炼 in-context 的输出草稿。策略被参数化为 {LLM, memory/context}——优化纯粹发生在 text/prompt 空间。",
+  "skill_as_artifact": "否。无持久可复用的制品。Reflexion：反思是作用域限于单个任务实例（问题 / AlfWorld env / 编程项）的临时 NL memory 条目，任务结束即丢弃。Self-Refine：精炼后的输出是一次生成调用的临时草稿；不存储任何内容供复用。关键在于，两者都不是跨任务的「技能」制品——仅是任务内部的临时「技能」。",
+  "skill_as_doc": "否。两者均不使用可读的指令文档（SKILL.md / markdown）作为核心载体。Reflexion = memory 列表中的自由格式 NL 反思字符串；Self-Refine = NL 反馈文本 + 精炼后的输出草稿。无 markdown 指令、无 YAML frontmatter、无 doc-as-skill 形态。（这是与 SKILL.md 自进化这条研究线的核心区别：它们是反思驱动的自我改进的根范式，但缺乏持久、可审查的文档载体。）",
+
+  "skill_encoding": "自然语言 SOP / NL 反思文本。Reflexion：自由格式的第一人称自然语言自我反思字符串（如「我应该先搜索抽屉……」），追加到一个 episodic memory 列表。Self-Refine：结构化的多维度 NL 反馈（如 positivity、conciseness 等维度）+ NL 精炼输出。无可执行代码制品、无向量嵌入、无图、无多文件技能包。",
+  "skill_granularity": "insight / 策略规则。Reflexion：从失败轨迹中蒸馏出的逐试次口头经验/策略提示（如针对某个 AlfWorld env 的「新计划」）。Self-Refine：对当前草稿的逐迭代 critique 点。粒度是 insight/反馈级，而非原子动作、非完整技能包、非子任务 workflow。",
+
+  "doc_form": "N/A——无 markdown 文档形态。Reflexion 的 memory 条目：简短 NL 反思（约 1-3 句，第一人称，如「New plan: check the drawer before the fridge」）。Self-Refine：一段简短 NL 反馈块 + 精炼后的输出草稿。典型 token 长度：Reflexion 的反思很小（受 Ω=1-3 条目限制）；Self-Refine 的反馈约数百 token。无 YAML frontmatter、无结构化字段、无作为载体的内嵌代码块（Self-Refine 的代码优化任务会精炼代码，但那是被改进的输出，而非技能文档）。",
+  "edit_granularity": "逐试次/迭代全新生成（regenerate）。Reflexion：每次试次追加一条新生成的反思；memory 是一个有界滑动窗口（Ω=1-3），故旧反思被丢弃——实质上是 append + window-trim，而非对固定文档的 diff/patch。Self-Refine：每次迭代完整重新生成基于新反馈条件化的精炼输出。无对持久制品的有界 add/delete/replace、无 minimal diff、无 PATCH、无 bundle 编辑。",
+  "version_gating": "无——无留出验证门控、无 git 分支、无 Pareto 前沿、无评审门控采纳、无 staging+backup。Reflexion：对 memory 条目做简单的滑动窗口替换（一种原始的强制退役规则，上限 Ω）。Self-Refine：仅停止准则——模型自身判定「无需进一步精炼」或命中固定迭代上限。被接受的反思/精炼不在留出集上验证；一条错误的自我反思仍可能条件化下一次试次（无 rejection buffer）。",
+  "doc_provenance": "失败轨迹蒸馏 + 成功轨迹归纳（test-gen 变体中）。Reflexion：自我反思由 Self-Reflection 模型从 {失败轨迹 τ_t, 稀疏奖励 r_t} → 口头经验 sr_t 蒸馏而来。Self-Refine：反馈从当前（常有缺陷的）草稿生成。两者皆是：轨迹 → NL。均不使用会话经验抽取、社区共享或离线 benchmark 训练作为文档来源。",
+  "cross_transfer": "跨任务：否——memory 在任务间重置（这是相较 SKILL.md 技能库方法的标志性局限）。跨模型：概念上可行（纯 prompt，与模型无关）但未作为迁移轴线研究。跨 agent harness / 跨用户 / 跨基准：未涉及。Reflexion 明确指出 memory 作用域限于任务实例；Self-Refine 是 intra-output 的。这种不可迁移性正是后来的 SKILL.md 进化工作（SkillOpt、EvoSkill、OpenSpace）在这些范式之上叠加持久、可移植文档的原因。",
+  "library_governance": "N/A——无技能库。Reflexion 唯一的治理原语是滑动窗口上限 Ω（1-3），这是一条粗略的强制退役/遗忘规则以尊重 context 限制——是文档膨胀控制的雏形，但非 curator loop，无去重/合并、无基于相似度的编辑定向、无分层索引、无 Lotka-Volterra 生态。Self-Refine 仅保留最新草稿。",
+  "failure_memory": "是，但是临时且任务局部的。Reflexion：反思明确源于失败（anti-pattern + 补救：「我做错了 X，应该做 Y」）。这是一个 failure-signature + attribution + remedy 三元组——但它仅存活于当前任务实例、之后即丢弃；无持久 anti-pattern 存储，无作为跨任务负反馈的 rejected-edit buffer。Self-Refine：反馈指出草稿中的缺陷（一种临时负信号），无持久失败记忆。",
+  "safety_guardrails": "最小。Reflexion：用有界 memory Ω 防止 context 溢出；对编程，要求隔离的执行环境（作者「强烈建议为自主代码编写使用隔离的执行环境」），且自生成的单元测试在使用前经 AST 校验语法有效性。Self-Refine：一个停止准则以避免无限反馈循环。两者均无编辑前备份/回滚、无范围边界（无文档可界定）、无人工在环、无 eval-hacking 防御、无有界编辑的破坏性重写保护——因为不存在需要保护的持久制品。",
+  "coevolution": "skill-only / generator-verifier 协同（在一个任务内）。Reflexion：Actor + Evaluator + Self-Reflection 是三个协同进化同一 memory 的不同 prompt/角色（一个 generator-verifier-reflector 三元组），但全部作用于任务实例——无 skill-tool 协同进化，无 skill-skill 生态。Self-Refine：generator / critic / refiner 是同一个配以不同 prompt 的 LLM（skill-prompt 联合、self-collaboration）。两者均不与外部工具或其他技能协同进化。",
+
+  "how_method": "reward-based（文本反馈 / 自我反思放大）+ rollout_optimization（非梯度、文本空间优化）。Reflexion（「verbal RL」）：一个稀疏奖励 r_t（二元 pass/fail、标量或自测结果）由 Self-Reflection 模型放大为 NL 口头反馈 sr_t，存入 episodic memory，条件化下一次 rollout——这是语言空间中的策略优化，无需梯度更新。Self-Refine：自生成的多维度反馈充当隐式奖励，引导输出的迭代文本空间精炼。两者均明确回避梯度/SFT/RL：「不需要任何有监督训练数据、额外训练或强化学习」（Self-Refine）；「不是通过更新权重，而是通过语言反馈来强化语言 agent」（Reflexion）。",
+  "learning_signal_source": "Reflexion：环境奖励（AlfWorld 的启发式成功信号、HotpotQA 的 exact-match 评分）+ 工具成功率指标（自写的单元测试作为 HumanEval/MBPP 的代理验证器）+ 自我反思（用于决策的 LLM 自评估/分类）。Self-Refine：LLM-as-judge（同一 LLM 沿任务特定维度评判自身输出）+ 成败轨迹（当前草稿作为轨迹）。两种来源均为 test-time，无离线训练标签。",
+  "reward_granularity": "hybrid（混合）。Reflexion：每次试次的 outcome 级二元/标量奖励（pass/fail）被放大为 process 级 NL 反思（即 outcome → process）。Self-Refine：对草稿的 process 级多维度 critique（直接的 process reward）。",
+  "learning_paradigm": "online；on-policy；intra-test-time（非 sleep-time / 离线）。两者均在推理期生成并从自身 rollout 中学习，无 replay buffer、无离线 sleep-time 巩固。Reflexion 在技术上是一个 episode 内迭代的 on-policy；Self-Refine 是单次调用的迭代精炼。",
+
+  "when_evolve": "intra-test-time。Reflexion：跨试次但在单个任务实例之内（memory 在同一问题 / AlfWorld env / 编程项的多次尝试间持久、在项间重置）。Self-Refine：在单次生成任务之内（迭代 feedback-refine 循环直至停止）。两者均不做持久制品的 inter-test-time sleep-time 离线进化。",
+  "trigger": "失败触发 + 事件触发。Reflexion：反思在评估器失败时触发（环境判定失败，或一个手写启发式检测到 agent 卡住——同一动作重复 >3 个周期，或在 AlfWorld env 中 >30 个动作——「低效规划」）。Self-Refine：每次迭代触发一个反馈步骤，直至模型的停止准则被满足（模型表示无需更多精炼）或命中固定迭代上限。两者均非周期性/cron、非课程驱动、非工具退化触发。",
+
+  "library_structure": "无。Reflexion：一个扁平列表（memory buffer）持有最近 Ω（1-3）条 NL 反思，作用域限于单个任务实例——无向量库、无分层索引、无 DAG、无 git、无云端注册中心、无图。Self-Refine：完全没有技能库；只有当前草稿 + 最新反馈存在于 context 中。作者明确将其标为未来工作：「我们鼓励未来工作用更先进的结构（如向量嵌入数据库或传统 SQL 数据库）来扩展 Reflexion 的 memory 组件。」",
+  "retrieval_method": "同实例直接复用——无语义检索。Reflexion：当前任务实例的全部已存储反思都被前置于下一次试次的 prompt（无嵌入、无 BM25、无 LLM rerank、无 description-match 触发；定向依据是任务实例的身份，而非相似度）。Self-Refine：最新反馈直接条件化下一个精炼步骤。无 generation-as-retrieval 或 workflow-match。通行的评审查证确认：「无全局向量库、语义检索层或跨任务 memory 索引。」",
+
+  "validation": "execution-based + LLM-judge + 代理验证器（无 ground truth）。Reflexion：AlfWorld 使用环境执行成功 + 一个 LLM/启发式自评估器；HotpotQA 使用 exact-match 执行评分；编程使用自写的单元测试作为代理验证器（经 AST 过滤，n≤6）——这是一种无 ground truth 的验证门控，使其符合 pass@1 资格。Self-Refine：LLM-as-judge（同一模型产出充当验证的反馈）。无留出验证集、无多模型辩论。",
+  "error_correction": "自我修订 + 重规划。Reflexion：基于新反思重新生成完整轨迹（对 AlfWorld，是一个「新计划」）；对代码，在测试/编译反馈引导下调试后重写实现。Self-Refine：在多维度反馈引导下对草稿做局部编辑。两者均不对持久文档使用有界 diff-patch，也无显式回滚（不存在可回退到的持久制品）。",
+
+  "test_env": "Reflexion：编程（HumanEval、MBPP、LeetcodeHardGym——一个新的 40 题难题 benchmark）、序列决策（AlfWorld，134 个 env / 6 种任务类型；WebShop 消融）、推理 QA（HotpotQA）。Self-Refine：7 项多样的生成任务——对话回复生成、数学推理、代码优化、缩写生成、故事生成、情感反转、毒性去除 / 受约束生成。总体：general。",
+  "backbone_model": "GPT 系列。Reflexion：GPT-3（AlfWorld few-shot）、GPT-3.5 / GPT-4（推理 + 编程，包括 text-davinci-003 与 gpt-3.5-turbo）；Reflexion 的 actor 角色还探索了 Chain-of-Thought 与 ReAct 作为动作生成器。Self-Refine：GPT-3.5（text-davinci-003、gpt-3.5-turbo）、GPT-4 与 Codex（code-davinci-002，用于代码）。optimizer/target 分离：Self-Refine 明确使用单个 LLM 同时充当 generator + feedback provider + refiner（无分离）。Reflexion 使用三个不同的 prompt（Actor / Evaluator / Self-Reflection）但同一底层模型家族——是逻辑角色分离，而非模型权重分离。",
+  "where_deploy": "general。两者均面向通用推理、编程、决策与语言生成——而非 specialized 垂直领域（非仅 GUI、非仅 office）。Reflexion 是 agentic（环境交互）；Self-Refine 是输出精炼；两者均为 general 领域。",
+
+  "metrics": "success_rate（HumanEval/MBPP/LeetcodeHard 的 pass@1；AlfWorld 134 个 env 的 solve-rate；HotpotQA 的 exact-match）+ 样本效率（至多 12 次试次的收敛曲线）+ 泛化（跨任务鲁棒性，跨 actor 类型 / 反馈信号 / 反馈纳入方式的消融）。Self-Refine 另加人工偏好率 + 任务特定自动指标（如 constraint-accuracy、BLEU）+「每迭代精炼率」。无 skill_library_growth 指标（无技能库）。无成本/经济价值捕获指标（早于该框架）。",
+  "key_results": "Reflexion：HumanEval Python pass@1 91%（对比先前 SOTA GPT-4 的 80%）；AlfWorld 解出 130/134（在 12 个迭代学习步内较 ReAct 基线绝对提升 +22%；ReAct-only 在约 22% 幻觉率处平台化）；HotpotQA 绝对 +20%（CoT-GT 经反思 +14%，自我反思在仅 episodic-memory 消融之上再加 +8%）；HumanEval Rust 68%（对比 GPT-4 的 60%），MBPP Rust 75.4%，LeetcodeHard 15%（对比 GPT-4 的 7.5%）；MBPP Python 77.1%（略低于 GPT-4 的 80.1%——归因于 16.3% 的自测假阳性率，而 HumanEval 为 1.4%）。消融：在 HumanEval-Rust 上移除 test-gen → 52%，移除自我反思 → 60%（无基线之上的提升）。Self-Refine：跨 7 项任务约 20% 的绝对平均改进（范围 5-40%）；输出在人工与自动指标上均优于 one-shot GPT-3.5/GPT-4；在 Codex 代码任务上最高 +13%。",
+
+  "limitations": "可扩展性（滑动窗口 memory Ω=1-3 限制 context，无向量/SQL 库）+ 灾难性遗忘/无跨任务迁移（memory 在任务实例间重置——这是相较 SKILL.md 技能库的标志性差距）+ 可迁移性（无跨模型/跨 harness 研究）+ 可控性（无正式成功保证；「可能陷入非最优局部最优」）+ optimizer_quality（完全依赖 LLM 自评估质量；弱自评估 → 弱反思）+ 代码上的 eval-hacking 风险（不稳定的自写测试 → 假阳性 pass@1，如 MBPP-Python 回归所示）+ 在探索密集任务上的局部最优失败（Reflexion 在 WebShop 上未能改进——4 次试次后终止；「无法解决需要大量多样性与探索的任务」）。Self-Refine：当自反馈不可靠时会过度精炼/放大自身错误；成本随迭代线性增长。两者：文档膨胀 N/A（无文档）。",
+
+  "takeaways": "三条可直接迁移的工程洞见，用于让 agent 自进化其 SKILL.md，源自这两个根范式：(1) 在写入制品前将稀疏奖励放大为 NL 反思——Reflexion 的核心动作是把二元/标量信号转化为第一人称的口头经验（「我做错了 X；下次做 Y」）。对 SKILL.md 进化而言，这是每一次编辑的种子：失败轨迹 → 蒸馏出的 insight → 追加/修订文档，而非从原始奖励盲目编辑。(2) 有界滑动窗口 memory（Ω=1-3）作为最简单可行的防膨胀/强制退役治理——Reflexion 表明即便粗略的上限也能防止 context 爆炸同时保持近期经验鲜活；SKILL.md 系统在引入 Lotka-Volterra 式生态之前，应继承此作为最低编辑预算/条目退役规则。(3) Self-Refine 的单 LLM 兼 generator/critic/refiner 配以多维度 process 级反馈，是最廉价的 test-time 循环（无需训练、无需额外模型）——可直接用于让一个 agent 沿 clarity / coverage / safety / regression-risk 等维度评判自身的 SKILL.md 并做局部编辑。移植到 SKILL.md 时需弥合的关键差距：两种范式都是任务内的、且在任务间丢弃 memory——跃迁到自进化的 SKILL.md 需要 (a) 把任务局部的反思提升为持久、可审查的 markdown 制品，(b) 补上它们所缺乏的验证门控（留出 / Pareto / 评审门控采纳），使一条糟糕的反思无法毒化文档，以及 (c) 加入跨任务检索以让 insight 迁移——这正是 SkillOpt / EvoSkill / OpenSpace 在 Reflexion 的 verbal-RL 原语之上叠加的内容。",
+
+  "uncertain": []
+}

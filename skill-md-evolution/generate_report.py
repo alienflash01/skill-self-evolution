@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Generate a markdown report from JSON results (SKILL.md self-evolution survey)."""
+import argparse
 import json
 import re
 import textwrap
@@ -141,7 +142,7 @@ def get_field(data, name):
     return None
 
 
-def main():
+def main(results_dir, report_path):
     cat_order, field_to_cat, known_fields = load_fields(FIELDS_PATH)
     topic, items = load_outline(OUTLINE_PATH)
 
@@ -176,7 +177,7 @@ def main():
             continue
         lines.append(f"### {group_name}\n")
         for it in grouped[cat_key]:
-            data = json.loads((RESULTS_DIR / f"{it['id']}.json").read_text(encoding="utf-8"))
+            data = json.loads((results_dir / f"{it['id']}.json").read_text(encoding="utf-8"))
             slug = slugify(it["name"])
             num = numbering[it["id"]]
             title = f"{num}. [{it['name']}](#{slug})"
@@ -206,7 +207,7 @@ def main():
         if cat_key not in grouped:
             continue
         for it in grouped[cat_key]:
-            data = json.loads((RESULTS_DIR / f"{it['id']}.json").read_text(encoding="utf-8"))
+            data = json.loads((results_dir / f"{it['id']}.json").read_text(encoding="utf-8"))
             slug = slugify(it["name"])
             num = numbering[it["id"]]
             lines.append(f"### {it['name']}\n")
@@ -239,10 +240,14 @@ def main():
                 lines.append("")
             lines.append("---\n")
 
-    REPORT_PATH.write_text("\n".join(lines), encoding="utf-8")
-    print(f"Report written: {REPORT_PATH}")
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"Report written: {report_path}")
     print(f"Items: {len(items)} | Lines: {len(lines)}")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Generate a markdown report from JSON results.")
+    parser.add_argument("--results-dir", default=str(RESULTS_DIR), help="Directory of per-item JSON files")
+    parser.add_argument("--output", default=str(REPORT_PATH), help="Output markdown path")
+    args = parser.parse_args()
+    main(Path(args.results_dir), Path(args.output))

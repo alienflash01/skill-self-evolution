@@ -1,0 +1,64 @@
+{
+  "_source_file": "voyager.json",
+  "name": "Voyager",
+  "institution": "NVIDIA、Caltech、UT Austin、ASU（MineDojo 团队）。作者：Guanzhi Wang、Yuqi Xie、Yunfan Jiang、Ajay Mandlekar、Chaowei Xiao、Yuke Zhu、Linxi Fan、Anima Anandkumar。",
+  "release_date": "2023-05-25（arXiv v1）；v2 修订于 2023-10-19",
+  "paper_link": "https://arxiv.org/abs/2305.16291",
+  "code_link": "https://github.com/MineDojo/Voyager",
+  "type": "academic",
+
+  "what_evolved": "Context记忆与提示 + Tools技能。不更新任何模型权重（纯黑盒 GPT-4 查询，无微调）。进化的制品是：(a) agent 不断增长的、由可执行 JavaScript 程序组成的技能库，以及 (b) 提出下一个探索任务的 in-context 自动课程。二者完全位于 LLM 权重之外。",
+  "skill_as_artifact": "是。每个技能是一个独立可复用的制品，存储在磁盘上：(1) `skill/code/<name>.js`——面向 Mineflayer bot API 的可执行 JavaScript 程序；(2) `skill/description/<name>.txt`——一个由 LLM 生成的自然语言描述，仅用于检索；(3) `skills.json` 中的一行，以及 Chroma 向量库中一个以描述 embedding 为键的向量。一小批手写的 `control_primitives/*.js`（mineBlock、craftItem、killMob、exploreUntil、placeItem、smeltItem、useChest、shoot）作为原子构件被播种，生成的技能在其之上组合。",
+  "skill_as_doc": "否。技能载体是可执行代码（JavaScript），而非可读的 markdown 指令文档。自然语言描述仅作为索引/检索条目存在（以 `//` 注释头形式内嵌于 .js 文件中），并非主制品。这正是将 Voyager 作为本调研中对比 SKILL.md 的反例纳入的原因。",
+
+  "skill_encoding": "可执行代码（JavaScript 程序）+ 作为注释头的自然语言描述，用于基于 embedding 的检索。每个技能是多文件技能包：代码文件、描述文件，外加 JSON 注册表与 Chroma 向量库。原子原语（control_primitives）是手写 JS；学习到的技能是调用原语的 GPT-4 生成 JS。",
+  "skill_granularity": "子任务 workflow / 完整技能。每个技能是一个命名的、时间上延展的行为（如「craft wooden pickaxe」「hunt cows for leather」），实现为 JS 函数 `async function <name>(bot) { ... }`。复杂技能通过调用先前存储的技能函数来组合更简单的技能——一个层次化、可组合的技能库。",
+
+  "doc_form": "在 SKILL.md 的意义上不适用——Voyager 没有 markdown 文档载体。最接近的类似物是 .js 技能文件，其「文档形式」= 一个 async 函数，包含：(a) 一个由 LLM 生成的多行 `// description` 头（用于 embedding 与检索），以及 (b) 调用 Mineflayer 原语的函数体。典型程序长度为数十行 JS。描述很短（几句话）。token 长度主要由可执行代码占据，而非散文。",
+  "edit_granularity": "全新生成（full regeneration）。当一个技能被添加时，整个 .js 程序由 GPT-4 端到端一次性生成，随后通过 iterative-prompting 循环，利用环境反馈 + 执行错误 + self-verification 整体重写（而非 patch）直至通过。重新添加已存在的技能名会触发版本化重写：旧文件被归档为 `<name>V2.js`、`V3.js`……而 skills.json 中的活动条目被覆写——一种粗粒度的整文件替换，而非有界的 add/delete/replace diff。",
+  "version_gating": "验证门控（留出、基于执行的 self-verification）——而非 git 分支 / Pareto / DAG。只有通过 GPT-4 self-verification（verifier agent 通过箱子库存 + 附近实体 + 状态检查最新环境状态）的技能才会被提交到技能库；未通过的程序停留在 iterative-prompting 循环中（最多 4 轮），若仍失败则被丢弃。仅有软版本控制：同名重新生成的技能以 V2/V3/... 备份形式转储到磁盘，但不会在它们之间主动选择。无暂存、无回滚、无人工审查门控。",
+  "doc_provenance": "LLM 一次性生成 + 失败轨迹蒸馏（通过执行错误迭代重生成）+ 执行录像回放（self-verification 读取执行后环境状态）。原子原语（control_primitives）是人工初始化（手写种子代码）。新技能由 GPT-4 从（课程任务 + 检索到的相关技能 + 原语上下文 + 环境反馈）中产出。",
+  "cross_transfer": "跨任务（Minecraft 内部）是头条结果：一个学习到的技能库可在全新的 Minecraft 世界中零样本复用以解决未见任务，而基线（ReAct、AutoGPT、ReSP）无法泛化。跨模型——未验证；紧密绑定于 GPT-4（提示假设具备 GPT-4 级代码生成与验证能力）。跨 agent harness——不适用；技能载体是 Mineflayer 特定的 JS，故不重写则无法迁移到 Claude/Codex/Cursor 或非 Minecraft harness。跨用户/团队——仅通过仓库中开源的 skill_library/ 目录。",
+  "library_governance": "层次化索引（向量库）+ 相似度检索编辑目标（retrieval_top_k=5，按描述 embedding）+ minimal 灰尘清理。明确的 anti-bloat 规则：deposit-chest 技能永不被添加（「No need to reuse the deposit skill」）。同名技能被版本化（V2.js、V3.js）而非去重/合并。无 Lotka-Volterra 退休、无 curator loop、除磁盘版本备份外无过时技能归档。",
+  "failure_memory": "部分。在单个技能学习 episode 内，执行错误与环境反馈被回馈到 iterative-prompting 循环（最多约 4 轮重生成）——一个短视界的负信号。Critic/curriculum agent 记录过往进展（新物品、生物群系、怪物、方块）以避免重新提出已完成的任务。然而，无持久的 anti-pattern 存储、无失败签名 + 修复库、无跨 episode 存活以否决未来有害编辑的 rejected-edit buffer。",
+  "safety_guardrails": "最小 / 仅执行层。范围被限定在 Minecraft 沙箱内——破坏性编辑无法逃出游戏世界（隐式收容）。Self-verification 充当软性的预提交门控。无编辑前备份+回滚（仅有事后 V2.js 版本转储用于意外的同名覆写）、无人工在环、无 eval-hacking 防御、无密钥/注入检查。安全性实际上依赖封闭的 Minecraft 环境而非文档编辑护栏（因为制品是程序而非文档）。",
+  "coevolution": "skill-skill 生态 + generator-verifier 协同。新技能组合并调用旧技能（skill-skill 生态，能力复合）。一个独立的 verifier agent（GPT-4 作为 critic）与技能生成器协同进化：同一个 GPT-4 既充当代码生成器又充当 self-verifier。自动 curriculum agent（同为 GPT-4）根据当前技能清单与发现状态提出下一个要学习的技能——一种 curriculum-skill 协同进化。无 skill-tool 联合编辑（原语工具 API 固定/手写）。",
+
+  "how_method": "rollout_optimization（非梯度，文本/代码空间优化，经迭代提示）+ imitation_demonstration（提示中的 few-shot 种子原语）。具体而言：GPT-4 生成一个 JS 程序；在 Mineflayer 中运行；环境反馈 + 执行错误 + self-verification 被折回提示，程序被重新生成，循环直至验证通过。对 LLM 无梯度/SFT/RL——仅黑盒 API 查询。curriculum 组件执行 in-context 新颖性搜索（LLM 根据迄今进展提出下一个最具探索价值的任务）。",
+  "learning_signal_source": "成败轨迹（执行成功/失败）+ 环境奖励（隐式：程序是否在 Minecraft 中产生了预期的状态改变）+ 自我反思（GPT-4 self-verification 读取箱子库存、附近实体与 bot 状态以判断任务是否达成）。curriculum agent 额外将发现新颖性（新物品/生物群系/怪物）作为探索信号。无外部奖励模型、无留出验证集。",
+  "reward_granularity": "outcome（每技能：验证过的任务是否成功？）。self-verification 对最终环境状态是二元 outcome 级的，而非逐步的 process credit。",
+  "learning_paradigm": "online（在终身学习过程中）+ on-policy（每个技能由当前 GPT-4 在当前检索到的上下文下新鲜生成，而非来自旧轨迹的 replay buffer）。风格上属 inter-test-time：早期 episode 中学到的技能被持久化并在后续 episode 中复用，但无离线 sleep-time replay——所有学习都在运行中的 Minecraft 会话内实时发生。",
+
+  "when_evolve": "inter-test-time + intra-test-time 混合。技能库在任务之间进化（inter-test-time：每个课程任务完成后，一个新技能可能被提交），并且在单个技能学习 episode 内 intra-test-time 进化（iterative-prompting 循环将程序重新生成最多约 4 次直至验证通过）。",
+  "trigger": "curriculum（课程）驱动 + 失败触发。自动 curriculum agent 提出每个下一个任务（= 新技能生成的显式课程驱动触发）。在技能学习 episode 内，执行失败 / 验证失败触发迭代重生成。整个循环由 curriculum 提出下一个探索任务以及对当前任务的环境反馈事件驱动——而非周期性 cron、非使用驱动。",
+
+  "library_structure": "扁平 + 向量库 hybrid。技能以扁平文件存储于 `skill/code/*.js` + `skill/description/*.txt` + 一个 `skills.json` 注册表，由一个扁平的 Chroma 向量库（`skill/vectordb/`）索引，以描述 embedding 为键。层次结构通过组合隐式体现（一个技能的代码可以调用另一个技能导出的函数），而非磁盘上显式的树/DAG。`skill_library/trialN/` 下的检查点目录快照一个已学习的库以供迁移。",
+  "retrieval_method": "语义相似度（基于描述 embedding 的语义相似度，top_k=5，经 Chroma OpenAIEmbeddings similarity_search_with_score）。检索到的技能代码与 control primitives 拼接，作为 few-shot 上下文注入生成提示。不使用 generation-as-retrieval；检索仅基于描述 embedding，无 BM25、无 LLM rerank、无 workflow 匹配。",
+
+  "validation": "基于执行的 self-verification（验证门控）。在一个候选技能运行后，一个单独的 GPT-4 verifier 调用检查产生的 Minecraft 状态（箱子内容、附近实体、bot 库存/状态、已完成的子目标）并发出接受/拒绝决定。只有被接受的技能被提交到库；被拒绝的重新进入 iterative-prompting 循环。无留出 benchmark、无代理 verifier、无多模型辩论。",
+  "error_correction": "自我修订（self-revision），经迭代重生成。每次失败/验证失败的尝试将执行错误信息 + 环境反馈 + self-verification 批评回馈到提示；同一技能从头重新生成（而非 patch）最多约 4 轮。无回滚、无有界 diff 编辑、无定向 patch——修正 = 用更丰富的上下文做整体重生成。重规划发生在 curriculum 层（若进展停滞，curriculum agent 重新选择下一个任务）。",
+
+  "test_env": "Minecraft（具体为经 Mineflayer 无头 bot 的 MineDojo 风味 Minecraft，带 fabric mod 与一个 1.19 fabric-loader 实例）。仅单一具身游戏环境。",
+  "backbone_model": "GPT-4（闭源，经 OpenAI 黑盒 API）用于全部三个 agent：自动 curriculum、技能代码生成与 self-verification。无 optimizer/target 分离——GPT-4 既是策略又是 verifier。代码生成假设 GPT-4 级能力；消融显示 gpt-3.5-turbo 急剧退化。Mineflayer bot 运行时是执行器，而非学习到的模型。",
+  "where_deploy": "specialized（单一游戏域：Minecraft 开放式探索）。技能库、提示模板与原语都是 Minecraft 特定的；方法论模式（终身学习的代码技能库 + 自动 curriculum + self-verification）可泛化，但制品不可。",
+
+  "metrics": "skill_library_growth（终身获取的技能数）+ sample_efficiency（达到里程碑的 episode / 迭代数）+ generalization（在全新 Minecraft 世界中对未见任务的零样本成功率）+ functional correctness（解锁的科技树里程碑）+ exploration coverage（获得的独特物品、移动距离、发现的生物群系）。成本（GPT-4 API token）被定性报告，但非头条指标。",
+  "key_results": "相对先前 SOTA（ReAct、AutoGPT 风格、ReSP），获得的独特物品多 3.3x、移动距离长 2.3x、科技树里程碑快达 15.3x。强终身学习：持续获取技能而无灾难性遗忘（归因于显式的外部技能库 vs 基于权重的记忆）。零样本迁移：在一个世界训练的技能库可从零开始解决新世界中所有未见任务，而基线无法泛化。消融显示移除技能库、自动 curriculum 或 self-verification 各自都显著降低性能——三个组件均不可少。",
+
+  "limitations": "optimizer_quality（依赖前沿 GPT-4 级 LLM；gpt-3.5-turbo 消融崩溃）+ transferability（技能紧密绑定于 Mineflayer/Minecraft bot API，无法迁移到其他 harness 或非游戏域）+ controllability（curriculum 由新颖性驱动，可能追求无关任务；无人工引导）+ catastrophic_forgetting 被缓解但以库膨胀为代价（V2/V3 转储，无真正退休）+ eval-hacking 风险（self-verification 由生成代码的同一 GPT-4 完成——无独立裁判）+ scalability（每个技能 = 一次完整 GPT-4 生成 + 执行轮次；成本随库大小线性增长）+ regression_risk（当同名新技能覆写旧技能时，对先前获取的技能无留出回归测试）。值得注意的是，制品形式本身（可执行代码）使人工审计昂贵——评审者必须阅读 JS + Mineflayer 语义，不像 markdown 指令那样。",
+
+  "takeaways": [
+    "BORROW (1)——提交前的 self-verification 门控。Voyager 的 verifier 检查执行后状态，仅提交通过的技能；对于 SKILL.md 演化，一个类似的 verifier（LLM-as-judge 对照文档所述效果与实际 rollout，或一个留出任务通过率门控）应当在每次编辑落地到技能目录前对其门控。缺少这一步，SKILL.md 文件会累积未经验证的散文。",
+    "BORROW (2)——基于 NL 描述的 embedding 索引检索 + 组合式复用。尽管 Voyager 的主制品是代码，它仍为每个技能单独生成一个 NL 描述，纯粹用于向量库检索（top-k=5），并将检索到的技能作为 in-context 示例注入。SKILL.md 应采取同样做法：保留一个为 embedding 检索优化的简洁描述字段（YAML frontmatter），即便正文是丰富的指令散文，并让复杂的 SKILL.md 技能引用/组合更简单的技能。",
+    "BORROW (3)——带执行反馈的迭代重生成，而非一次性写入。iterative-prompting 循环（环境反馈 + 执行错误 + 自我批评，最多 N 轮）可直接移植：当文档的 dry-run/sandbox 可用时，SKILL.md 编辑同样应是 regenerate-with-feedback 循环，而非单次 LLM 写入。",
+    "BORROW (4)——anti-bloat 规则 + 同名版本控制。Voyager 明确拒绝存储「deposit useless items」技能，并为同名覆写转储 V2/V3 备份。SKILL.md 治理同样应当 (a) 维护一个低价值文档类型的拒绝列表，永不提交，以及 (b) 在覆写时保留版本化备份以从回归中恢复。",
+    "CONTRAST（SKILL.md 胜出的地方）——可读性：SKILL.md 是人类可读的指令；Voyager 的 .js 技能需要 Mineflayer + JS 专业知识才能审计。可审计性：SKILL.md 可在部署前经人工审查或批准（人工在环是自然的）；Voyager 的 verifier 是编写代码的同一个 GPT-4（无独立检查）。可迁移性：SKILL.md 指令对 agent harness 可移植（Claude/Codex/Cursor 都能读 markdown）；Voyager 的技能锁定于 Mineflayer/Minecraft。组合性在性质上不同：Voyager 通过 JS 中的函数调用组合（精确、确定、可重放），而 SKILL.md 通过引用 + 计划组合（灵活，但丧失确定性重放）。结论：借鉴 Voyager 的验证 + 检索 + anti-bloat 工程，但保留 SKILL.md 的散文载体以在可读性、可审计性与跨 harness 迁移上取胜——接受确定性可重放性较弱的权衡。"
+  ],
+
+  "uncertain": [
+    "library_governance——除 V2.js 备份外，确切的退休/归档策略未文档化；仅从源码推断",
+    "failure_memory——检查点中除 skills.json 与 curriculum 的进展记录外，是否有任何跨 episode 的失败信号持久化",
+    "release_date——arXiv v1（2023-05-25）与 v2（2023-10-19）之间存在轻微歧义；以 v1 为准",
+    "reward_granularity——论文将 self-verification 描述为 outcome 级；无逐步 credit assignment，但 curriculum 新颖性带有 process 风味"
+  ]
+}
