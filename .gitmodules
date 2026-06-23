@@ -4,3 +4,6 @@
 [submodule "claude-evolving-skills"]
 	path = reference/claude-evolving-skills
 	url = git@github.com:alienflash01/claude-evolving-skills.git
+[submodule "claude-self-improving-skills"]
+	path = reference/claude-self-improving-skills
+	url = git@github.com:alienflash01/claude-self-improving-skills.git
