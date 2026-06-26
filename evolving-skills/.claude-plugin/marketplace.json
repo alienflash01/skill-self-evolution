@@ -1,0 +1,22 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "evolving-skills",
+  "description": "Evolving Skills: dual-layer (online + offline) skill self-evolution for Claude Code.",
+  "owner": {
+    "name": "fanwei"
+  },
+  "plugins": [
+    {
+      "name": "evolving-skills",
+      "description": "Online distillation via Stop hooks + offline sleep cycle with held-out validation gate + memory consolidation into CLAUDE.md/SKILL.md.",
+      "author": {
+        "name": "fanwei"
+      },
+      "category": "productivity",
+      "source": {
+        "source": "directory",
+        "path": "."
+      }
+    }
+  ]
+}
