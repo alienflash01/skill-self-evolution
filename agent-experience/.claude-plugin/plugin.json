@@ -1,0 +1,19 @@
+{
+  "name": "agent-experience",
+  "description": "Distill trial-and-error experiences from Claude Code sessions into reusable rules. Detects fail→retry→success patterns in tool calls and consolidates them into CLAUDE.md and a structured rules.json.",
+  "version": "0.1.0",
+  "author": {
+    "name": "fanwei"
+  },
+  "homepage": "",
+  "repository": "",
+  "license": "MIT",
+  "keywords": [
+    "self-improvement",
+    "experience-distillation",
+    "trial-and-error",
+    "skills",
+    "memory",
+    "continual-learning"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "postToolUse": [
+      {
+        "matcher": {
+          "toolName": ["Bash", "Write", "Edit", "MultiEdit"]
+        },
+        "action": "run",
+        "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use.py\""
+      }
+    ]
+  }
+}
