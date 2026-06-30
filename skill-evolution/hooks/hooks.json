@@ -1,0 +1,73 @@
+{
+  "hooks": {
+    "postToolUse": [
+      {
+        "matcher": {
+          "toolName": ["Bash", "Write", "Edit", "MultiEdit"]
+        },
+        "action": "run",
+        "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use.py\""
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/on-stop.sh\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/on-session-start.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/on-pre-edit.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse_Edit": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/on-post-edit.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/on-session-end.sh\"",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}

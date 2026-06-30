@@ -1,0 +1,17 @@
+{
+  "name": "skill-evolution",
+  "description": "Unified skill self-evolution for Claude Code: online tool-level experience distillation (PostToolUse) + online task-level skill distillation (Stop hook) + offline sleep cycle with validation gate. Merges agent-experience + evolving-skills into one plugin.",
+  "version": "0.2.0",
+  "author": {
+    "name": "fanwei"
+  },
+  "license": "MIT",
+  "keywords": [
+    "self-improvement",
+    "skill-evolution",
+    "experience-distillation",
+    "sleep-cycle",
+    "validation-gate",
+    "continual-learning"
+  ]
+}
