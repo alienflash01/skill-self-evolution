@@ -229,16 +229,29 @@ def _extract_text(content: Any) -> str:
 
 # Heuristic: user messages that indicate correction
 _CORRECTION_SIGNALS = (
-    "not right", "not correct", "wrong", "no,", "nope", "incorrect",
-    "不对", "错了", "不是", "不正确", "不行", "重新", "改一下",
-    "should be", "supposed to", "i meant", "actually",
-    "应该是", "意思是", "其实",
+    "not right", "not correct", "that's wrong", "thats wrong",
+    "no, that", "nope", "incorrect",
+    "不对", "错了", "不是这", "不正确", "不行", "重新来", "改一下",
+    "should be using", "supposed to be", "i meant", "actually, use",
+    "应该是用", "意思是用", "其实应该",
 )
 
-# Errors that are just permission denials (low learning value)
+# Corrections must be short (not a full task description) and start with a signal
+_MAX_CORRECTION_LEN = 200
+
+# Errors that are just permission denials or sandbox blocks (low learning value)
 _PERMISSION_ERRORS = (
     "requested permissions", "haven't granted", "permission",
     "requires approval", "was blocked",
+)
+
+# Additional low-value errors (environment/sandbox issues, not coding mistakes)
+_LOW_VALUE_ERRORS = (
+    "no such file or directory",
+    "command not found",
+    "no module named",
+    "executable file not found",
+    "file exists",
 )
 
 
@@ -248,10 +261,35 @@ def _is_permission_error(output: str) -> bool:
     return any(sig in low for sig in _PERMISSION_ERRORS)
 
 
+def _is_low_value_error(output: str) -> bool:
+    """Check if error is a low-value environment issue (missing file/binary/module)."""
+    low = output.lower().strip()
+    # Take first line only (exit codes like "Exit code 1" are noise)
+    first_line = low.split("\n")[-1].strip() if "\n" in low else low
+    return any(sig in first_line for sig in _LOW_VALUE_ERRORS)
+
+
 def _is_user_correction(text: str) -> bool:
-    """Check if a user message is correcting the agent."""
-    low = text.lower().strip()
-    return any(sig in low for sig in _CORRECTION_SIGNALS)
+    """Check if a user message is correcting the agent.
+
+    Filters:
+    - Must be short (< _MAX_CORRECTION_LEN chars) — long messages are task descriptions
+    - Must START with a correction signal — avoids matching "actually" in the middle
+    - Checked word-by-word at the start of the text
+    """
+    stripped = text.strip()
+    if len(stripped) > _MAX_CORRECTION_LEN:
+        return False
+    low = stripped.lower()
+    # Check if the text STARTS with any correction signal
+    for sig in _CORRECTION_SIGNALS:
+        if low.startswith(sig):
+            return True
+    # Also check Chinese patterns that may appear mid-sentence but short
+    short_cn = ("不对", "错了", "不是这", "不正确", "不行", "改一下", "重新来")
+    if len(stripped) < 80 and any(sig in low for sig in short_cn):
+        return True
+    return False
 
 
 def _same_tool_type(a: ToolCall, b: ToolCall) -> bool:
@@ -310,6 +348,9 @@ def detect_patterns(
                 break
             if _is_permission_error(prev.output):
                 # Skip permission errors, keep looking back
+                continue
+            if _is_low_value_error(prev.output):
+                # Skip low-value errors (missing files/binaries), keep looking back
                 continue
             consecutive_failures.append(prev)
 
@@ -422,6 +463,31 @@ def extract_rule_llm(trial: TrialError, model: str = "") -> Optional[str]:
         return None
 
 
+def _is_quality_rule(text: str) -> bool:
+    """Check if a heuristic-generated rule is high enough quality to save.
+    
+    Rejects rules where the delta produced garbage (long arg fragments,
+    shell operators, paths leaking into the rule text).
+    """
+    if not text or len(text.strip()) < 15:
+        return False
+    # Reject if rule contains shell operators or pipes (delta leaked raw tokens)
+    bad_tokens = ("&&", "||", "|", ">", "<", "2>/dev/null", "/dev/null")
+    if any(t in text for t in bad_tokens):
+        return False
+    # Reject if the "add:" part is just a jumble of flags and paths
+    # (heuristic produces these when shlex diff on complex commands yields noise)
+    if "add:" in text.lower():
+        after_add = text.lower().split("add:")[-1].strip()
+        # Count tokens that look like flags/paths vs words
+        tokens = after_add.split()
+        if tokens:
+            flag_like = sum(1 for t in tokens if t.startswith("-") or "/" in t or "\\" in t)
+            if flag_like / len(tokens) > 0.6:
+                return False
+    return True
+
+
 def extract_rule_heuristic(trial: TrialError) -> Optional[str]:
     """Heuristic rule extraction without LLM (fallback when no API)."""
     if not trial.failed_calls or not trial.succeeded_call:
@@ -432,31 +498,51 @@ def extract_rule_heuristic(trial: TrialError) -> Optional[str]:
     failed_cmd = _get_command(trial.failed_calls[0])
     succeeded_cmd = _get_command(trial.succeeded_call)
 
+    # For simple single-token additions, heuristic works well
     if trial.tool == "Bash" and trial.added_args:
-        return (
-            f"When `{failed_cmd.split()[0] if failed_cmd else 'command'}` fails with "
-            f"'{trial.error_text[:80]}', add: {' '.join(trial.added_args)}"
-        )
+        # Only use heuristic for short, clean deltas (1-3 tokens, all short)
+        clean_adds = [a for a in trial.added_args if len(a) < 30 and "/" not in a and "\\" not in a]
+        if clean_adds and len(clean_adds) == len(trial.added_args):
+            cmd_name = failed_cmd.split()[0] if failed_cmd else "command"
+            return (
+                f"When `{cmd_name}` fails with "
+                f"'{trial.error_text.split(chr(10))[0][:80]}', "
+                f"add: {' '.join(clean_adds)}"
+            )
+        # Complex delta → heuristic can't produce quality rule
+        return None
     elif trial.tool == "Bash" and trial.removed_args:
-        return (
-            f"Avoid using {' '.join(trial.removed_args)} with "
-            f"{failed_cmd.split()[0] if failed_cmd else 'the command'}"
-        )
+        clean_rems = [a for a in trial.removed_args if len(a) < 30 and "/" not in a]
+        if clean_rems and len(clean_rems) == len(trial.removed_args):
+            cmd_name = failed_cmd.split()[0] if failed_cmd else "command"
+            return f"Avoid using {' '.join(clean_rems)} with `{cmd_name}`"
+        return None
     elif trial.pattern == "multi_attempt":
-        return (
-            f"Multiple attempts were needed. The working approach was: "
-            f"{succeeded_cmd[:150]}"
-        )
+        # For multi-attempt, just note the approach change
+        return None  # too complex for heuristic
     return None
 
 
 def extract_rule(trial: TrialError, use_llm: bool = False) -> Optional[str]:
-    """Extract a rule from a trial-and-error pattern."""
+    """Extract a rule from a trial-and-error pattern.
+    
+    With use_llm=True: always tries LLM first, falls back to heuristic.
+    With use_llm=False: uses heuristic, but returns None for complex patterns
+    (caller can decide to retry with LLM).
+    """
     if use_llm:
         rule = extract_rule_llm(trial)
         if rule:
             return rule
-    return extract_rule_heuristic(trial)
+        # LLM failed, try heuristic as fallback
+        return extract_rule_heuristic(trial)
+    
+    # Non-LLM mode: try heuristic
+    rule = extract_rule_heuristic(trial)
+    if rule and _is_quality_rule(rule):
+        return rule
+    # Heuristic failed or quality too low → skip (caller can retry with --llm)
+    return None
 
 
 # ── Rule Storage ──────────────────────────────────────────────────────────────
@@ -738,7 +824,8 @@ def run_offline_distill(
 
         rule_text = extract_rule(trial, use_llm=use_llm)
         if not rule_text:
-            print(f"  → No rule extracted (skipped)")
+            hint = "" if use_llm else " (try --llm for LLM extraction)"
+            print(f"  → No rule extracted{hint}, skipped")
             rules_skipped += 1
             continue
 
