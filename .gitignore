@@ -1,5 +1,20 @@
-# Windows artifact
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.coverage
+.pytest_cache/
+
+# Node
+node_modules/
+
+# Windows
 nul
 
-# Nested git repo (separate project clone, would be a broken submodule without .gitmodules)
-backup/deep-research-skills/
+# Nested git repo
+backup/
+
+# Staging output (runtime data)
+.evolving-skills/

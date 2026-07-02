@@ -82,8 +82,11 @@ def run_sleep_cycle(
     # Select backend
     if backend_name == "mock":
         backend = MockBackend()
+    elif backend_name == "cc":
+        from sleep.cc_backend import CCBackend
+        backend = CCBackend()
     else:
-        backend = MockBackend()  # TODO: real backends
+        backend = MockBackend()
 
     # Live files
     live_memory_path = os.path.join(project, "CLAUDE.md")
