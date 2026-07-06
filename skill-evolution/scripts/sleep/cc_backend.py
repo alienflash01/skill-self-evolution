@@ -30,7 +30,14 @@ between failed and successful approaches, then distill them into concrete rules.
 ## Current memory document
 {memory}
 
+## Past Attempts (avoid repeating these)
+{feedback_history}
+
+Do NOT propose edits similar to rejected ones above.
+
 ## Instructions
+- Analyze ALL failure-success pairs together. Identify COMMON patterns across multiple
+  failures. Propose rules that address multiple failures at once, not just individual cases.
 - For each pair, identify the SPECIFIC behavioral difference between the failed and
   the successful response. Do NOT propose vague rules like "be careful" or "keep it concise".
 - Each rule must be a concrete, actionable instruction that, if followed, would have
@@ -121,11 +128,22 @@ class CCBackend(Backend):
     name = "cc"
 
     def __init__(self, model: str = "", reflect_model: str = "",
+                 judge_model: str = "",
                  claude_path: str = "claude", timeout: int = 120):
         self.model = model
         self.reflect_model = reflect_model or model
+        self.judge_model = judge_model
         self.claude_path = claude_path
         self.timeout = timeout
+
+        self._llm_judge = None
+        if judge_model:
+            from sleep.llm_judge import LLMJudge
+            self._llm_judge = LLMJudge(
+                model=judge_model,
+                claude_path=claude_path,
+                timeout=min(timeout, 30),
+            )
 
     # ── attempt: re-run a task with current skill+memory ────────────────────
 
@@ -165,7 +183,8 @@ class CCBackend(Backend):
         Priority:
         1. exit_code — if task.reference_kind == 'exit_code' and exit_code is set
         2. exact     — if task.reference_kind == 'exact' and reference is set
-        3. outcome   — fallback to outcome-derived score
+        3. LLM judge — if judge_model is configured (requires non-empty response)
+        4. outcome   — fallback to outcome-derived score
         """
         # Exit-code judging (highest priority)
         if task.reference_kind == "exit_code":
@@ -179,6 +198,13 @@ class CCBackend(Backend):
             hard = 1.0 if _normalize(task.reference) in _normalize(response) else 0.0
             soft = max(hard, _keyword_soft(task.reference, response))
             return hard, soft, f"exact={'match' if hard else 'mismatch'}"
+
+        # LLM judge (if configured and task is not exit_code/exact)
+        if self._llm_judge and task.reference_kind not in ("exit_code", "exact"):
+            if not response.strip():
+                return 0.0, 0.0, "empty_response"
+            score, rationale = self._llm_judge.score(task, response)
+            return score, score, rationale
 
         # Outcome-derived
         return _judge_outcome(task, response)
@@ -245,11 +271,19 @@ class CCBackend(Backend):
                 block.append("SUCCESS — (no comparable success available)")
             pair_lines.append("\n".join(block))
 
+        # Load feedback history so CC knows what was already tried
+        from sleep.feedback_history import FeedbackHistory
+        fh = FeedbackHistory()
+        feedback_history_text = fh.get_summary(max_entries=20)
+        if not feedback_history_text:
+            feedback_history_text = "(none yet)"
+
         prompt = _REFLECT_PROMPT.format(
             budget=edit_budget,
             skill=skill[:1000],
             memory=memory[:1000],
             comparison_pairs="\n\n".join(pair_lines),
+            feedback_history=feedback_history_text,
         )
 
         cmd = [self.claude_path, "-p", prompt, "--output-format", "text"]

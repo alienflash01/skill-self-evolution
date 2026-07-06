@@ -21,8 +21,9 @@ from sleep.memory import ensure_skill_scaffold
 from sleep.mine import mine as do_mine
 from sleep.replay import Backend, MockBackend, replay_batch, aggregate_scores
 from sleep.staging import adopt as adopt_staging, write_staging
-from sleep.state import SleepState
+from sleep.state import SleepState, FRONTIER_PATH
 from sleep.models import SleepReport, TaskRecord
+from sleep.frontier import Frontier, FrontierEntry
 
 CLAUDE_HOME = os.path.expanduser("~/.claude")
 STATE_DIR = os.path.expanduser("~/.evolving-skills")
@@ -74,10 +75,16 @@ def run_sleep_cycle(
     max_tasks: int = 40,
     edit_budget: int = 4,
     auto_adopt: bool = False,
+    frontier_size: int = 3,
+    frontier_strategy: str = "round_robin",
 ) -> dict:
     project = project or os.getcwd()
     state = SleepState.load()
     night = state.begin_night()
+
+    # Load frontier (top-N candidate pool)
+    frontier_path = state.frontier_path
+    frontier = Frontier.load(frontier_path) if not dry_run else Frontier(max_size=frontier_size)
 
     # Select backend
     if backend_name == "mock":
@@ -91,12 +98,24 @@ def run_sleep_cycle(
     # Live files
     live_memory_path = os.path.join(project, "CLAUDE.md")
     live_skill_path = os.path.join(CLAUDE_HOME, "skills", "evolving-skills-learned", "SKILL.md")
-    raw_skill = _read(live_skill_path)
-    skill = raw_skill or ensure_skill_scaffold(
-        "", name="evolving-skills-learned",
-        description="Learned from past sessions.",
-    )
-    memory = _read(live_memory_path)
+
+    # Select parent from frontier if available, otherwise use live files
+    parent = frontier.select(strategy=frontier_strategy) if frontier.size > 0 else None
+    if parent is not None:
+        skill = parent.skill or _read(live_skill_path) or ensure_skill_scaffold(
+            "", name="evolving-skills-learned",
+            description="Learned from past sessions.",
+        )
+        memory = parent.memory or _read(live_memory_path)
+        parent_lineage = list(parent.lineage)
+    else:
+        raw_skill = _read(live_skill_path)
+        skill = raw_skill or ensure_skill_scaffold(
+            "", name="evolving-skills-learned",
+            description="Learned from past sessions.",
+        )
+        memory = _read(live_memory_path)
+        parent_lineage = []
 
     # 1. Harvest
     since = state.last_harvest_for(project)
@@ -153,12 +172,33 @@ def run_sleep_cycle(
             live_skill_path=live_skill_path, live_memory_path=live_memory_path,
             report_md=report_md,
         )
+
+        # Add accepted candidate to frontier
+        if result.accepted:
+            lineage = parent_lineage + ([parent.skill] if parent else [])
+            # Trim lineage label to avoid unbounded growth
+            lineage_label = parent.skill[:60] if parent else "root"
+            entry = FrontierEntry(
+                skill=result.new_skill,
+                memory=result.new_memory,
+                hard_score=result.candidate_score,
+                soft_score=result.candidate_score,
+                mixed_score=result.candidate_score,
+                added_at_night=night,
+                lineage=lineage[:20],  # cap at 20 ancestors
+            )
+            frontier.add(entry)
+            state.set_best(lineage_label, result.candidate_score)
+
+        frontier.save(frontier_path)
+
         state.set_last_harvest(project, report.started_at)
         state.record_night({
             "night": night, "accepted": result.accepted,
             "baseline": result.baseline_score, "candidate": result.candidate_score,
             "n_tasks": len(tasks), "staging": staging_dir,
             "ran_at": _now_iso(),
+            "frontier_size": frontier.size,
         })
 
         # 6. Adopt (opt-in)
@@ -197,6 +237,7 @@ def run_sleep_cycle(
         "rejected": len(result.rejected_edits),
         "staging_dir": staging_dir,
         "adopted": adopted,
+        "frontier_size": frontier.size,
         "report": report.to_dict(),
     }
 
@@ -215,6 +256,11 @@ def run_sleep_cycle_cli():
     parser.add_argument("--max-tasks", type=int, default=40)
     parser.add_argument("--edit-budget", type=int, default=4)
     parser.add_argument("--auto-adopt", action="store_true")
+    parser.add_argument("--frontier-size", type=int, default=3,
+                        help="Max entries in the frontier pool")
+    parser.add_argument("--frontier-strategy", default="round_robin",
+                        choices=["round_robin", "best", "random"],
+                        help="Parent selection strategy from frontier")
     parser.add_argument("--json", action="store_true")
 
     # Parse known args (run-sleep.sh passes action as first positional)
@@ -257,6 +303,8 @@ def run_sleep_cycle_cli():
         max_tasks=args.max_tasks,
         edit_budget=args.edit_budget,
         auto_adopt=args.auto_adopt,
+        frontier_size=args.frontier_size,
+        frontier_strategy=args.frontier_strategy,
     )
 
     if args.json:

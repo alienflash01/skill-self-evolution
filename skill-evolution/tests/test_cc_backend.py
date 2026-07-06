@@ -391,3 +391,294 @@ class TestCCBackendName:
 
     def test_backend_name_is_cc(self):
         assert CCBackend().name == "cc"
+
+
+# ── Feedback History tests ──────────────────────────────────────────────────
+
+class TestFeedbackHistory:
+
+    def test_feedback_history_record_appends(self, tmp_path):
+        """record() should append one line per edit to the markdown file."""
+        from sleep.feedback_history import FeedbackHistory
+        path = str(tmp_path / "feedback_history.md")
+        fh = FeedbackHistory(path=path)
+        edit = EditRecord(target="skill", op="add", content="使用祈使句写commit", rationale="clarity")
+
+        fh.record(edit, outcome="rejected_no_improvement", score_delta=-0.02)
+
+        entries = fh.load()
+        assert len(entries) == 1
+        assert entries[0]["content"] == "使用祈使句写commit"
+        assert entries[0]["outcome"] == "rejected_no_improvement"
+        assert entries[0]["score_delta"] == -0.02
+
+    def test_feedback_history_get_summary_returns_recent(self, tmp_path):
+        """get_summary should return the most recent N entries as markdown text."""
+        from sleep.feedback_history import FeedbackHistory
+        path = str(tmp_path / "feedback_history.md")
+        fh = FeedbackHistory(path=path)
+
+        for i in range(5):
+            edit = EditRecord(target="skill", op="add", content=f"rule {i}", rationale="")
+            fh.record(edit, outcome="rejected_low_score", score_delta=-0.01 * i)
+
+        summary = fh.get_summary(max_entries=3)
+        # Must be a string
+        assert isinstance(summary, str)
+        # Must contain only 3 entries (the most recent ones: rule 2, 3, 4)
+        lines = [l for l in summary.strip().split("\n") if l.strip()]
+        assert len(lines) == 3
+        # Must contain the most recent entry
+        assert "rule 4" in summary
+
+    def test_feedback_history_clear_empties(self, tmp_path):
+        """clear() should remove all entries from the file."""
+        from sleep.feedback_history import FeedbackHistory
+        path = str(tmp_path / "feedback_history.md")
+        fh = FeedbackHistory(path=path)
+
+        edit = EditRecord(target="skill", op="add", content="some rule", rationale="")
+        fh.record(edit, outcome="accepted", score_delta=0.05)
+        assert len(fh.load()) == 1
+
+        fh.clear()
+        assert fh.load() == []
+        assert fh.get_summary() == ""
+
+
+# ── Reflect improvement tests: feedback history + batch analysis ─────────────
+
+class TestReflectFeedbackHistory:
+
+    def test_reflect_prompt_contains_feedback_history(self):
+        """reflect prompt should include feedback_history section."""
+        backend = CCBackend()
+        from sleep.replay import ReplayResult
+        task = TaskRecord(id="t1", intent="Fix bug", outcome="fail")
+        failures = [(task, ReplayResult(id="t1", hard=0.0))]
+
+        captured_prompt = []
+        def capture(cmd, *a, **kw):
+            if isinstance(cmd, list) and len(cmd) > 2:
+                captured_prompt.append(cmd[2])
+            return _mock_cc_result(stdout="[]")
+
+        with patch("sleep.cc_backend.subprocess.run", side_effect=capture):
+            backend.reflect(failures, [], skill="# S\n", memory="# M\n", edit_budget=2)
+
+        assert len(captured_prompt) == 1
+        prompt = captured_prompt[0]
+        assert "feedback_history" in prompt.lower() or "past attempts" in prompt.lower()
+
+    def test_reflect_prompt_says_avoid_repeating(self):
+        """reflect prompt should contain instruction to avoid repeating rejected edits."""
+        backend = CCBackend()
+        from sleep.replay import ReplayResult
+        task = TaskRecord(id="t1", intent="Fix bug", outcome="fail")
+        failures = [(task, ReplayResult(id="t1", hard=0.0))]
+
+        captured_prompt = []
+        def capture(cmd, *a, **kw):
+            if isinstance(cmd, list) and len(cmd) > 2:
+                captured_prompt.append(cmd[2])
+            return _mock_cc_result(stdout="[]")
+
+        with patch("sleep.cc_backend.subprocess.run", side_effect=capture):
+            backend.reflect(failures, [], skill="# S\n", memory="# M\n", edit_budget=2)
+
+        assert len(captured_prompt) == 1
+        prompt = captured_prompt[0].lower()
+        assert "avoid repeating" in prompt or "do not propose" in prompt
+
+
+class TestReflectBatchAnalysis:
+
+    def test_reflect_includes_all_failures_in_one_prompt(self):
+        """All failures should be in a single prompt, not processed one-by-one."""
+        backend = CCBackend()
+        from sleep.replay import ReplayResult
+        fail1 = TaskRecord(id="f1", intent="Fix login bug in auth.py", outcome="fail")
+        fail2 = TaskRecord(id="f2", intent="Refactor the payment module", outcome="fail")
+        failures = [
+            (fail1, ReplayResult(id="f1", hard=0.0, response="resp1", fail_reason="reason1")),
+            (fail2, ReplayResult(id="f2", hard=0.0, response="resp2", fail_reason="reason2")),
+        ]
+
+        captured_prompt = []
+        call_count = {"n": 0}
+        def capture(cmd, *a, **kw):
+            call_count["n"] += 1
+            if isinstance(cmd, list) and len(cmd) > 2:
+                captured_prompt.append(cmd[2])
+            return _mock_cc_result(stdout="[]")
+
+        with patch("sleep.cc_backend.subprocess.run", side_effect=capture):
+            backend.reflect(failures, [], skill="# S\n", memory="# M\n", edit_budget=2)
+
+        # Should make exactly ONE call to claude, not one per failure
+        assert call_count["n"] == 1
+        assert len(captured_prompt) == 1
+        prompt = captured_prompt[0]
+        # Both failures must be in the single prompt
+        assert "Fix login bug" in prompt
+        assert "Refactor the payment module" in prompt
+
+    def test_reflect_prompt_contains_common_pattern_instruction(self):
+        """Prompt should instruct CC to find COMMON patterns across multiple failures."""
+        backend = CCBackend()
+        from sleep.replay import ReplayResult
+        fail1 = TaskRecord(id="f1", intent="Fix bug A", outcome="fail")
+        fail2 = TaskRecord(id="f2", intent="Fix bug B", outcome="fail")
+        failures = [
+            (fail1, ReplayResult(id="f1", hard=0.0)),
+            (fail2, ReplayResult(id="f2", hard=0.0)),
+        ]
+
+        captured_prompt = []
+        def capture(cmd, *a, **kw):
+            if isinstance(cmd, list) and len(cmd) > 2:
+                captured_prompt.append(cmd[2])
+            return _mock_cc_result(stdout="[]")
+
+        with patch("sleep.cc_backend.subprocess.run", side_effect=capture):
+            backend.reflect(failures, [], skill="# S\n", memory="# M\n", edit_budget=2)
+
+        assert len(captured_prompt) == 1
+        prompt = captured_prompt[0].lower()
+        assert "common" in prompt
+        assert "pattern" in prompt
+
+
+# ── LLM Judge tests ────────────────────────────────────────────────────────────
+
+class TestLLMJudge:
+    """Tests for LLM-as-judge scoring of open-ended tasks."""
+
+    _PRIME_TASK_INTENT = "Write a function to check if a number is prime"
+    _GOOD_RESPONSE = (
+        "def is_prime(n):\n"
+        '    """Return True if n is prime."""\n'
+        "    if n < 2:\n"
+        "        return False\n"
+        "    for i in range(2, int(n ** 0.5) + 1):\n"
+        "        if n % i == 0:\n"
+        "            return False\n"
+        "    return True\n"
+    )
+
+    # ── 1. Good response → high score ──────────────────────────────────────────
+
+    def test_llm_judge_returns_high_score_for_good_response(self):
+        """A correct, complete response should receive a high score."""
+        from sleep.llm_judge import LLMJudge
+        from sleep.models import TaskRecord
+
+        task = TaskRecord(id="t1", intent=self._PRIME_TASK_INTENT, reference_kind="none")
+        judge = LLMJudge()
+
+        with patch("sleep.llm_judge.subprocess.run",
+                   return_value=_mock_cc_result(stdout="0.9")):
+            score, rationale = judge.score(task, self._GOOD_RESPONSE)
+
+        assert score >= 0.8
+
+    # ── 2. Bad response → low score ────────────────────────────────────────────
+
+    def test_llm_judge_returns_low_score_for_bad_response(self):
+        """A non-answer should receive a low score."""
+        from sleep.llm_judge import LLMJudge
+        from sleep.models import TaskRecord
+
+        task = TaskRecord(id="t1", intent=self._PRIME_TASK_INTENT, reference_kind="none")
+        judge = LLMJudge()
+
+        with patch("sleep.llm_judge.subprocess.run",
+                   return_value=_mock_cc_result(stdout="0.1")):
+            score, rationale = judge.score(task, "I dont know")
+
+        assert score <= 0.2
+
+    # ── 3. Empty response → zero, no CC call ──────────────────────────────────
+
+    def test_llm_judge_returns_zero_for_empty_response(self):
+        """Empty/whitespace response must return 0 without calling CC."""
+        from sleep.llm_judge import LLMJudge
+        from sleep.models import TaskRecord
+
+        task = TaskRecord(id="t1", intent=self._PRIME_TASK_INTENT, reference_kind="none")
+        judge = LLMJudge()
+
+        with patch("sleep.llm_judge.subprocess.run") as mock_run:
+            score, rationale = judge.score(task, "")
+
+        assert score == 0.0
+        mock_run.assert_not_called()
+
+    # ── 4. Prompt contains rubric ──────────────────────────────────────────────
+
+    def test_llm_judge_uses_rubric(self):
+        """The prompt sent to CC must contain rubric/scoring criteria."""
+        from sleep.llm_judge import LLMJudge
+        from sleep.models import TaskRecord
+
+        task = TaskRecord(id="t1", intent=self._PRIME_TASK_INTENT, reference_kind="none")
+        judge = LLMJudge()
+
+        captured_prompt = []
+
+        def capture(cmd, *a, **kw):
+            if isinstance(cmd, list) and len(cmd) > 2:
+                captured_prompt.append(cmd[2])
+            return _mock_cc_result(stdout="0.8")
+
+        with patch("sleep.llm_judge.subprocess.run", side_effect=capture):
+            judge.score(task, self._GOOD_RESPONSE)
+
+        assert len(captured_prompt) == 1
+        prompt = captured_prompt[0]
+        # Rubric must define the scoring scale
+        assert "0.0" in prompt and "1.0" in prompt
+        # Should mention key rubric anchors
+        prompt_lower = prompt.lower()
+        assert "perfect" in prompt_lower or "correct" in prompt_lower
+        assert "score" in prompt_lower or "rate" in prompt_lower
+        # Task intent must appear in the prompt
+        assert self._PRIME_TASK_INTENT in prompt
+
+    # ── 5. CC failure → fallback (0.5) ─────────────────────────────────────────
+
+    def test_llm_judge_fallback_on_cc_failure(self):
+        """When CC times out or errors, return a neutral fallback score."""
+        from sleep.llm_judge import LLMJudge
+        from sleep.models import TaskRecord
+
+        task = TaskRecord(id="t1", intent=self._PRIME_TASK_INTENT, reference_kind="none")
+        judge = LLMJudge(timeout=5)
+
+        with patch("sleep.llm_judge.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=5)):
+            score, rationale = judge.score(task, self._GOOD_RESPONSE)
+
+        assert score == 0.5
+        assert "fallback" in rationale.lower()
+
+    # ── 6. CCBackend.judge uses LLM when no exit_code/exact ────────────────────
+
+    def test_judge_uses_llm_when_no_exit_code_or_exact(self):
+        """CCBackend with judge_model should use LLM judge for open-ended tasks."""
+        from sleep.models import TaskRecord
+
+        backend = CCBackend(model="test", judge_model="glm-4.6")
+        task = TaskRecord(
+            id="t1",
+            intent=self._PRIME_TASK_INTENT,
+            reference_kind="none",
+            outcome="unknown",
+            exit_code=None,
+        )
+
+        with patch("sleep.llm_judge.subprocess.run",
+                   return_value=_mock_cc_result(stdout="0.7")):
+            hard, soft, rationale = backend.judge(task, self._GOOD_RESPONSE)
+
+        assert hard == 0.7

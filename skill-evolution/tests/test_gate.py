@@ -6,6 +6,7 @@ Ties are rejected by design.
 """
 import pytest
 from sleep.gate import select_gate_score, evaluate_gate, GateResult
+from sleep.frontier import Frontier, FrontierEntry
 
 
 class TestSelectGateScore:
@@ -132,3 +133,148 @@ class TestEvaluateGate:
         # candidate mixed = 0.5*0.8 + 0.5*0.7 = 0.75 > 0.7
         assert result.action == "accept_new_best"
         assert result.current_score == pytest.approx(0.75)
+
+
+# ── Frontier (top-N candidate pool) ───────────────────────────────────────────
+
+
+def _entry(skill: str, score: float, **kw) -> FrontierEntry:
+    """Build a FrontierEntry with sensible defaults."""
+    return FrontierEntry(
+        skill=skill,
+        memory=kw.get("memory", ""),
+        hard_score=score,
+        soft_score=kw.get("soft_score", score),
+        mixed_score=kw.get("mixed_score", score),
+        added_at_night=kw.get("added_at_night", 0),
+        lineage=kw.get("lineage", []),
+    )
+
+
+class TestFrontier:
+    """Frontier: top-N candidate pool for evolutionary resilience."""
+
+    def test_frontier_starts_empty(self):
+        f = Frontier()
+        assert f.size == 0
+        assert f.best is None
+
+    def test_frontier_add_first_candidate(self):
+        f = Frontier()
+        assert f.add(_entry("A", 0.8)) is True
+        assert f.size == 1
+        assert f.best is not None
+        assert f.best.skill == "A"
+
+    def test_frontier_keeps_top_n(self):
+        f = Frontier(max_size=3)
+        for i, s in enumerate([0.5, 0.9, 0.7, 0.8, 0.6]):
+            f.add(_entry(f"skill_{i}", s))
+        assert f.size == 3
+        scores = sorted(e.mixed_score for e in f.entries)
+        # top 3 of [0.5,0.9,0.7,0.8,0.6] are 0.9, 0.8, 0.7
+        assert scores == [0.7, 0.8, 0.9]
+
+    def test_frontier_replaces_worst(self):
+        f = Frontier(max_size=3)
+        f.add(_entry("A", 0.8))
+        f.add(_entry("B", 0.7))
+        f.add(_entry("C", 0.6))
+        # add 0.75 → should replace C (0.6)
+        accepted = f.add(_entry("D", 0.75))
+        assert accepted is True
+        skills = {e.skill for e in f.entries}
+        assert "D" in skills
+        assert "C" not in skills
+        assert f.size == 3
+
+    def test_frontier_rejects_below_threshold(self):
+        f = Frontier(max_size=3)
+        f.add(_entry("A", 0.8))
+        f.add(_entry("B", 0.7))
+        f.add(_entry("C", 0.6))
+        # add 0.5 → below all existing → rejected
+        accepted = f.add(_entry("E", 0.5))
+        assert accepted is False
+        assert f.size == 3
+        skills = {e.skill for e in f.entries}
+        assert "E" not in skills
+
+    def test_frontier_select_returns_one_candidate(self):
+        f = Frontier(max_size=5)
+        f.add(_entry("A", 0.9))
+        f.add(_entry("B", 0.8))
+        f.add(_entry("C", 0.7))
+        selected = f.select()
+        assert selected is not None
+        assert selected.skill in {"A", "B", "C"}
+
+    def test_frontier_select_round_robin(self):
+        f = Frontier(max_size=5)
+        f.add(_entry("A", 0.9))
+        f.add(_entry("B", 0.8))
+        f.add(_entry("C", 0.7))
+        # Select 3 times round-robin — each candidate should appear once
+        picks = [f.select(strategy="round_robin").skill for _ in range(3)]
+        assert sorted(picks) == ["A", "B", "C"]
+
+    def test_frontier_best_score(self):
+        f = Frontier(max_size=5)
+        f.add(_entry("A", 0.7))
+        f.add(_entry("B", 0.9))
+        f.add(_entry("C", 0.8))
+        assert f.best_score == pytest.approx(0.9)
+        assert f.best.skill == "B"
+
+    def test_frontier_select_best_strategy(self):
+        f = Frontier(max_size=5)
+        f.add(_entry("A", 0.7))
+        f.add(_entry("B", 0.9))
+        f.add(_entry("C", 0.8))
+        for _ in range(3):
+            assert f.select(strategy="best").skill == "B"
+
+    def test_frontier_select_random_strategy(self):
+        f = Frontier(max_size=5)
+        f.add(_entry("A", 0.9))
+        selected = f.select(strategy="random")
+        assert selected is not None
+        assert selected.skill == "A"
+
+    def test_frontier_select_empty_returns_none(self):
+        f = Frontier()
+        assert f.select() is None
+
+    def test_frontier_min_threshold(self):
+        f = Frontier(max_size=3, min_threshold=0.6)
+        # below threshold → rejected even when not full
+        assert f.add(_entry("low", 0.5)) is False
+        assert f.size == 0
+        # at threshold → accepted
+        assert f.add(_entry("ok", 0.6)) is True
+        assert f.size == 1
+
+    def test_frontier_persistence_roundtrip(self, tmp_path):
+        f = Frontier(max_size=3)
+        f.add(_entry("A", 0.8, memory="mem A", lineage=["root"]))
+        f.add(_entry("B", 0.9, memory="mem B", lineage=["root", "A"]))
+        path = str(tmp_path / "frontier.json")
+        f.save(path)
+        f2 = Frontier.load(path)
+        assert f2.size == 2
+        assert f2.best.skill == "B"
+        assert f2.best_score == pytest.approx(0.9)
+        assert f2.best.memory == "mem B"
+        assert f2.best.lineage == ["root", "A"]
+
+    def test_frontier_to_dict_roundtrip(self):
+        f = Frontier(max_size=3)
+        f.add(_entry("A", 0.8))
+        d = f.to_dict()
+        f2 = Frontier.from_dict(d)
+        assert f2.size == 1
+        assert f2.best.skill == "A"
+
+    def test_frontier_load_missing_file_returns_empty(self, tmp_path):
+        f = Frontier.load(str(tmp_path / "nonexistent.json"))
+        assert f.size == 0

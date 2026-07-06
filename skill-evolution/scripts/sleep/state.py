@@ -14,12 +14,16 @@ from typing import Any, Dict, List, Optional
 
 STATE_DIR = os.path.expanduser("~/.evolving-skills")
 STATE_PATH = os.path.join(STATE_DIR, "sleep_state.json")
+FRONTIER_PATH = os.path.join(STATE_DIR, "frontier.json")
 
 DEFAULT_STATE: Dict[str, Any] = {
     "version": 1,
     "night": 0,
     "last_harvest": {},
     "history": [],
+    "frontier_path": FRONTIER_PATH,
+    "best_skill": "",
+    "best_score": 0.0,
 }
 
 
@@ -75,3 +79,20 @@ class SleepState:
         if history:
             return history[-1].get("ran_at", "unknown")
         return "never"
+
+    @property
+    def frontier_path(self) -> str:
+        return self.data.get("frontier_path", FRONTIER_PATH)
+
+    @property
+    def best_skill(self) -> str:
+        return self.data.get("best_skill", "")
+
+    @property
+    def best_score(self) -> float:
+        return float(self.data.get("best_score", 0.0))
+
+    def set_best(self, skill: str, score: float) -> None:
+        """Update the best skill/score tracked in sleep state."""
+        self.data["best_skill"] = skill
+        self.data["best_score"] = float(score)
