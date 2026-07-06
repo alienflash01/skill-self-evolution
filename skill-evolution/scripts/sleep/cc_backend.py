@@ -17,27 +17,32 @@ from sleep.replay import Backend, _normalize, _keyword_soft
 from sleep.models import EditRecord, ReplayResult, TaskRecord
 
 _REFLECT_PROMPT = """You are analyzing failed tasks from an AI coding agent's recent sessions.
-The agent tried these tasks but failed. Propose BOUNDED edits to the skill/memory
-documents so the agent won't repeat the same mistakes.
+Below, each failed task is paired with a comparable SUCCESSFUL task so you can see
+exactly WHAT went wrong by contrast. Your goal is to find the meaningful differences
+between failed and successful approaches, then distill them into concrete rules.
+
+## Comparison Pairs (failure vs success)
+{comparison_pairs}
+
+## Current skill document
+{skill}
+
+## Current memory document
+{memory}
+
+## Instructions
+- For each pair, identify the SPECIFIC behavioral difference between the failed and
+  the successful response. Do NOT propose vague rules like "be careful" or "keep it concise".
+- Each rule must be a concrete, actionable instruction that, if followed, would have
+  changed the failed response to look more like the successful one.
+- Focus on transferable patterns (formatting, process, verification, structure) rather
+  than task-specific details.
 
 Rules:
 - Output ONLY a JSON array of edit objects
 - Each edit: {{"target":"skill"|"memory", "op":"add", "content":"<rule text>", "rationale":"<why>"}}
 - Maximum {budget} edits
-- Be concise and general (not tied to specific files or paths)
-- If no useful edits can be extracted, output []
-
-Current skill document:
-{skill}
-
-Current memory document:
-{memory}
-
-Failed tasks ({fail_count}):
-{failures_text}
-
-Successful tasks ({success_count}):
-{successes_text}
+- If no useful differences can be extracted, output []
 
 Proposed edits (JSON array):"""
 
@@ -59,14 +64,66 @@ def _strip_code_fence(text: str) -> str:
     return text
 
 
+# ── exit-code judging helpers ──────────────────────────────────────────────
+
+def _judge_exit_code(task: TaskRecord, response: str) -> Tuple[float | None, float, str]:
+    """Judge based on exit code.
+
+    Returns (hard, soft, rationale).  If ``task.exit_code`` is *None*
+    (not available), returns ``(None, ...)`` so the caller can fall back
+    to outcome-based judging.
+    """
+    if task.exit_code is None:
+        return None, 0.0, "no exit_code"
+
+    if task.exit_code == 0:
+        return 1.0, 1.0, "exit_code=0 (success)"
+
+    return 0.0, 0.0, f"exit_code={task.exit_code} (failure)"
+
+
+def _judge_outcome(task: TaskRecord, response: str) -> Tuple[float, float, str]:
+    """Outcome-derived scoring (the pre-existing default path)."""
+    outcome_scores = {"success": 1.0, "mixed": 0.5, "unknown": 0.5, "fail": 0.0}
+    hard = outcome_scores.get(task.outcome, 0.5)
+    soft = hard
+
+    # Try keyword overlap with attempted solution for soft score
+    if task.attempted_solution:
+        soft = max(soft, _keyword_soft(task.attempted_solution, response))
+
+    return hard, soft, f"outcome={task.outcome}"
+
+
+class ExitCodeJudge:
+    """Standalone exit-code judge.
+
+    Useful for pipelines that want to score purely on exit codes without
+    instantiating a full CCBackend (which carries claude_path / timeout).
+
+    If the task has an exit_code, it is used:
+      - exit 0  → hard 1.0
+      - exit !=0 → hard 0.0
+    If the task has no exit_code (None), it falls back to outcome-based
+    scoring.
+    """
+
+    def judge(self, task: TaskRecord, response: str) -> Tuple[float, float, str]:
+        hard, soft, rationale = _judge_exit_code(task, response)
+        if hard is not None:
+            return hard, soft, rationale
+        return _judge_outcome(task, response)
+
+
 class CCBackend(Backend):
     """Replay backend that calls `claude -p` for real task execution."""
 
     name = "cc"
 
-    def __init__(self, model: str = "", claude_path: str = "claude",
-                 timeout: int = 120):
+    def __init__(self, model: str = "", reflect_model: str = "",
+                 claude_path: str = "claude", timeout: int = 120):
         self.model = model
+        self.reflect_model = reflect_model or model
         self.claude_path = claude_path
         self.timeout = timeout
 
@@ -103,7 +160,20 @@ class CCBackend(Backend):
     # ── judge: score the response ───────────────────────────────────────────
 
     def judge(self, task: TaskRecord, response: str) -> Tuple[float, float, str]:
-        """Score the response. Returns (hard, soft, rationale)."""
+        """Score the response. Returns (hard, soft, rationale).
+
+        Priority:
+        1. exit_code — if task.reference_kind == 'exit_code' and exit_code is set
+        2. exact     — if task.reference_kind == 'exact' and reference is set
+        3. outcome   — fallback to outcome-derived score
+        """
+        # Exit-code judging (highest priority)
+        if task.reference_kind == "exit_code":
+            hard, soft, rationale = _judge_exit_code(task, response)
+            if hard is not None:
+                return hard, soft, rationale
+            # No exit_code available — fall through to outcome
+
         # Exact match
         if task.reference_kind == "exact" and task.reference:
             hard = 1.0 if _normalize(task.reference) in _normalize(response) else 0.0
@@ -111,17 +181,32 @@ class CCBackend(Backend):
             return hard, soft, f"exact={'match' if hard else 'mismatch'}"
 
         # Outcome-derived
-        outcome_scores = {"success": 1.0, "mixed": 0.5, "unknown": 0.5, "fail": 0.0}
-        hard = outcome_scores.get(task.outcome, 0.5)
-        soft = hard
-
-        # Try keyword overlap with attempted solution for soft score
-        if task.attempted_solution:
-            soft = max(soft, _keyword_soft(task.attempted_solution, response))
-
-        return hard, soft, f"outcome={task.outcome}"
+        return _judge_outcome(task, response)
 
     # ── reflect: propose edits from failures ────────────────────────────────
+
+    @staticmethod
+    def _most_similar_success(
+        task: TaskRecord,
+        successes: List[Tuple[TaskRecord, ReplayResult]],
+    ) -> Tuple[TaskRecord, ReplayResult] | None:
+        """Pick the success task most similar to *task* (by intent keyword overlap).
+
+        Falls back to the first success if no overlap is found.
+        """
+        if not successes:
+            return None
+
+        def _tokens(s: str) -> set:
+            return {t for t in (s or "").lower().split() if len(t) > 2}
+
+        task_tokens = _tokens(task.intent)
+        best, best_score = successes[0], 0
+        for s_task, s_result in successes:
+            overlap = len(task_tokens & _tokens(s_task.intent))
+            if overlap > best_score:
+                best, best_score = (s_task, s_result), overlap
+        return best
 
     def reflect(
         self,
@@ -132,36 +217,44 @@ class CCBackend(Backend):
         *,
         edit_budget: int = 4,
     ) -> List[EditRecord]:
-        """Call claude to analyze failures and propose skill/memory edits."""
+        """Call claude to analyze failures and propose skill/memory edits.
+
+        Each failure is paired with the most similar success so the model can
+        contrast the failed approach against a known-good approach.
+        """
         if not failures:
             return []
 
-        # Build failures summary
-        fail_lines = []
-        for task, result in failures[:10]:
-            fail_lines.append(
-                f"- Task: {task.intent[:200]}\n"
-                f"  Reason: {result.fail_reason[:150]}\n"
-                f"  Response: {result.response[:150]}"
+        # Build comparison pairs: failure vs closest success
+        pair_lines = []
+        for i, (task, result) in enumerate(failures[:10], 1):
+            best_match = self._most_similar_success(task, successes)
+            block = [f"### Pair {i}"]
+            block.append(
+                f"FAILED — Intent: {task.intent[:200]}\n"
+                f"         Reason: {result.fail_reason[:150]}\n"
+                f"         Response: {result.response[:200]}"
             )
-
-        success_lines = []
-        for task, result in successes[:5]:
-            success_lines.append(f"- Task: {task.intent[:200]}")
+            if best_match is not None:
+                s_task, s_result = best_match
+                block.append(
+                    f"SUCCESS — Intent: {s_task.intent[:200]}\n"
+                    f"          Response: {s_result.response[:200]}"
+                )
+            else:
+                block.append("SUCCESS — (no comparable success available)")
+            pair_lines.append("\n".join(block))
 
         prompt = _REFLECT_PROMPT.format(
             budget=edit_budget,
             skill=skill[:1000],
             memory=memory[:1000],
-            fail_count=len(failures),
-            failures_text="\n".join(fail_lines),
-            success_count=len(successes),
-            successes_text="\n".join(success_lines),
+            comparison_pairs="\n\n".join(pair_lines),
         )
 
         cmd = [self.claude_path, "-p", prompt, "--output-format", "text"]
-        if self.model:
-            cmd.extend(["--model", self.model])
+        if self.reflect_model:
+            cmd.extend(["--model", self.reflect_model])
 
         try:
             result = subprocess.run(

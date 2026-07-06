@@ -199,6 +199,193 @@ class TestCCBackendReflect:
         edits = backend.reflect([], [], skill="# S\n", memory="# M\n", edit_budget=2)
         assert edits == []
 
+    # ── New tests: success-comparison in reflect prompt ──────────────────────
+
+    def _make_failures_and_successes(self):
+        """Helper: one failure with a distinct response, one success with a distinct response."""
+        from sleep.replay import ReplayResult
+        fail_task = TaskRecord(id="f1", intent="Fix the authentication bug in login.py", outcome="fail")
+        fail_result = ReplayResult(
+            id="f1", hard=0.0,
+            response="I modified login.py but forgot to handle the edge case.",
+            fail_reason="missing edge case",
+        )
+        succ_task = TaskRecord(id="s1", intent="Fix the authentication bug in auth.py", outcome="success")
+        succ_result = ReplayResult(
+            id="s1", hard=1.0,
+            response="I modified auth.py and added comprehensive edge case handling.",
+        )
+        return [(fail_task, fail_result)], [(succ_task, succ_result)]
+
+    def test_reflect_includes_success_comparison(self):
+        """reflect prompt should contain BOTH failure and success info side by side for contrast."""
+        backend = CCBackend()
+        failures, successes = self._make_failures_and_successes()
+
+        captured_prompt = []
+        def capture(cmd, *a, **kw):
+            # cmd is the full arg list: [claude_path, "-p", prompt, "--output-format", "text", ...]
+            if isinstance(cmd, list) and len(cmd) > 2:
+                captured_prompt.append(cmd[2])
+            return _mock_cc_result(stdout="[]")
+
+        with patch("sleep.cc_backend.subprocess.run", side_effect=capture):
+            backend.reflect(failures, successes, skill="# S\n", memory="# M\n", edit_budget=2)
+
+        assert len(captured_prompt) == 1
+        prompt = captured_prompt[0]
+        # The prompt must explicitly mention comparison / contrast between fail and success
+        prompt_lower = prompt.lower()
+        assert "differ" in prompt_lower or "contrast" in prompt_lower or "comparison" in prompt_lower
+
+    def test_reflect_prompt_contains_failed_response(self):
+        """reflect prompt must include the failed task's actual response text."""
+        backend = CCBackend()
+        failures, successes = self._make_failures_and_successes()
+        failed_response_snippet = "forgot to handle the edge case"
+
+        captured_prompt = []
+        def capture(cmd, *a, **kw):
+            if isinstance(cmd, list) and len(cmd) > 2:
+                captured_prompt.append(cmd[2])
+            return _mock_cc_result(stdout="[]")
+
+        with patch("sleep.cc_backend.subprocess.run", side_effect=capture):
+            backend.reflect(failures, successes, skill="# S\n", memory="# M\n", edit_budget=2)
+
+        assert len(captured_prompt) == 1
+        assert failed_response_snippet in captured_prompt[0]
+
+    def test_reflect_prompt_contains_successful_response(self):
+        """reflect prompt must include the successful task's actual response text."""
+        backend = CCBackend()
+        failures, successes = self._make_failures_and_successes()
+        success_response_snippet = "added comprehensive edge case handling"
+
+        captured_prompt = []
+        def capture(cmd, *a, **kw):
+            if isinstance(cmd, list) and len(cmd) > 2:
+                captured_prompt.append(cmd[2])
+            return _mock_cc_result(stdout="[]")
+
+        with patch("sleep.cc_backend.subprocess.run", side_effect=capture):
+            backend.reflect(failures, successes, skill="# S\n", memory="# M\n", edit_budget=2)
+
+        assert len(captured_prompt) == 1
+        assert success_response_snippet in captured_prompt[0]
+
+
+class TestExitCodeJudge:
+    """Tests for exit-code-based judging: exit 0 = hard 1.0, exit !=0 = hard 0.0."""
+
+    def test_exit_code_zero_returns_full_score(self):
+        """Task with reference_kind='exit_code' and exit_code=0 → hard 1.0."""
+        backend = CCBackend()
+        task = TaskRecord(
+            id="t1",
+            reference_kind="exit_code",
+            exit_code=0,
+            outcome="unknown",
+        )
+        hard, soft, rationale = backend.judge(task, "any response")
+        assert hard == 1.0
+
+    def test_exit_code_nonzero_returns_zero(self):
+        """Task with reference_kind='exit_code' and exit_code=1 → hard 0.0."""
+        backend = CCBackend()
+        task = TaskRecord(
+            id="t1",
+            reference_kind="exit_code",
+            exit_code=1,
+            outcome="success",
+        )
+        hard, soft, rationale = backend.judge(task, "any response")
+        assert hard == 0.0
+
+    def test_no_exit_code_falls_back_to_outcome(self):
+        """Task with reference_kind='exit_code' but no exit_code → outcome fallback."""
+        backend = CCBackend()
+        task = TaskRecord(
+            id="t1",
+            reference_kind="exit_code",
+            outcome="success",
+        )
+        hard, soft, rationale = backend.judge(task, "any response")
+        assert hard == 1.0  # falls back to outcome=success
+
+    def test_exit_code_takes_priority_over_outcome(self):
+        """Exit-code judging should override outcome even if they disagree."""
+        backend = CCBackend()
+        # exit_code=0 but outcome='fail' — exit code wins
+        task_pass = TaskRecord(
+            id="t1",
+            reference_kind="exit_code",
+            exit_code=0,
+            outcome="fail",
+        )
+        hard, _, _ = backend.judge(task_pass, "response")
+        assert hard == 1.0
+
+        # exit_code=1 but outcome='success' — exit code wins
+        task_fail = TaskRecord(
+            id="t2",
+            reference_kind="exit_code",
+            exit_code=127,
+            outcome="success",
+        )
+        hard, _, _ = backend.judge(task_fail, "response")
+        assert hard == 0.0
+
+
+class TestReflectModel:
+
+    def test_reflect_uses_reflect_model_when_set(self):
+        """When reflect_model is set, reflect() uses it instead of model."""
+        backend = CCBackend(model="glm-4-flash", reflect_model="glm-4.6")
+        task = TaskRecord(id="t1", intent="Fix bug", outcome="fail")
+        from sleep.replay import ReplayResult
+        failures = [(task, ReplayResult(id="t1", hard=0.0))]
+
+        with patch("sleep.cc_backend.subprocess.run",
+                   return_value=_mock_cc_result(stdout="[]")):
+            backend.reflect(failures, [], skill="# S\n", memory="# M\n", edit_budget=2)
+
+        # Verify reflect used glm-4.6, not glm-4-flash
+        from sleep.cc_backend import subprocess as sb
+        # The mock_run captures the call
+        import sleep.cc_backend as mod
+        with patch.object(mod.subprocess, "run", return_value=_mock_cc_result(stdout="[]")) as mock_run2:
+            backend.reflect(failures, [], skill="# S\n", memory="# M\n", edit_budget=2)
+            cmd = mock_run2.call_args[0][0]
+            assert "glm-4.6" in cmd
+            assert "glm-4-flash" not in cmd
+
+    def test_attempt_uses_main_model(self):
+        """attempt() always uses self.model, not reflect_model."""
+        backend = CCBackend(model="glm-4-flash", reflect_model="glm-4.6")
+        task = TaskRecord(id="t1", intent="Do something")
+
+        with patch("sleep.cc_backend.subprocess.run", return_value=_mock_cc_result()) as mock_run:
+            backend.attempt(task, skill="", memory="")
+
+        cmd = mock_run.call_args[0][0]
+        assert "glm-4-flash" in cmd
+        assert "glm-4.6" not in cmd
+
+    def test_reflect_defaults_to_main_model(self):
+        """Without reflect_model, reflect() falls back to model."""
+        backend = CCBackend(model="glm-4-flash")
+        task = TaskRecord(id="t1", intent="Fix bug", outcome="fail")
+        from sleep.replay import ReplayResult
+        failures = [(task, ReplayResult(id="t1", hard=0.0))]
+
+        with patch("sleep.cc_backend.subprocess.run",
+                   return_value=_mock_cc_result(stdout="[]")) as mock_run:
+            backend.reflect(failures, [], skill="# S\n", memory="# M\n", edit_budget=2)
+
+        cmd = mock_run.call_args[0][0]
+        assert "glm-4-flash" in cmd
+
 
 class TestCCBackendName:
 

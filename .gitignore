@@ -18,3 +18,5 @@ backup/
 
 # Staging output (runtime data)
 .evolving-skills/
+.claude/worktrees/
+*.bak

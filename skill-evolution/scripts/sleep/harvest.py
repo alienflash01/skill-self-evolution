@@ -31,6 +31,19 @@ _REPLAY_PROMPT_MARKERS = (
     "You are SkillOpt", "You are evolving-skills", "## TASK\n", "## SKILL\n",
 )
 
+# Markers that identify sessions produced by the sleep-cycle itself
+# (e2e_validation transcripts, skill-evolution harness output, etc.)
+_SLEEP_CYCLE_MARKERS = (
+    "# Skill Instructions",
+    "evolving-skills",
+    "EVOLVING-SKILLS",
+    "sleep cycle",
+    "sleep_cycle",
+    "e2e_validation",
+    "analyze_real",
+    "BEGIN AGENT-EXPERIENCE",
+)
+
 
 def _iter_jsonl(path: str) -> Iterable[Dict[str, Any]]:
     try:
@@ -111,6 +124,20 @@ def _is_headless_replay(digest: "SessionDigest") -> bool:
                 return True
         except (ValueError, TypeError):
             pass
+    return False
+
+
+def _is_self_referential(digest: "SessionDigest") -> bool:
+    """Detect sessions produced by the sleep-cycle itself.
+
+    These transcripts contain skill-evolution harness markers in their
+    user prompts (e.g. '# Skill Instructions', 'e2e_validation', etc.)
+    and should be filtered out during harvest to prevent prompt pollution.
+    """
+    for prompt in digest.user_prompts:
+        for marker in _SLEEP_CYCLE_MARKERS:
+            if marker in prompt:
+                return True
     return False
 
 
@@ -224,6 +251,8 @@ def harvest(
         if d is None:
             continue
         if _is_headless_replay(d):
+            continue
+        if _is_self_referential(d):
             continue
         if not _project_matches(d.project or "", scope, invoked_project):
             continue

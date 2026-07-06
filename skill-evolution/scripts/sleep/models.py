@@ -9,7 +9,7 @@ runs with zero external dependencies.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 # ── Stage 1: harvest ──────────────────────────────────────────────────────────
@@ -61,8 +61,9 @@ class TaskRecord:
     context_excerpt: str = ""               # minimal context needed to attempt it
     attempted_solution: str = ""            # what the agent produced before
     outcome: str = "unknown"                # success | fail | mixed | unknown
-    reference_kind: str = "none"            # exact | rubric | rule | none
+    reference_kind: str = "none"            # exact | rubric | rule | exit_code | none
     reference: str = ""                     # exact answer, or rubric text
+    exit_code: Optional[int] = None         # bash exit code (None = not available)
     tags: List[str] = field(default_factory=list)
     source_sessions: List[str] = field(default_factory=list)
     # split ∈ {train, val}. val gates updates; train drives reflect.

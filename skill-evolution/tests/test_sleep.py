@@ -118,6 +118,65 @@ class TestHarvest:
     def test_harvest_empty_dir_returns_empty(self):
         assert harvest("/nonexistent/path") == []
 
+    def test_harvest_filters_sleep_cycle_sessions(self, tmp_path):
+        """Sessions containing sleep-cycle markers should be filtered out."""
+        p = tmp_path / "sleep_session.jsonl"
+        _make_session_jsonl(
+            str(p),
+            ["# Skill Instructions\n\nPlease improve the evolving-skills framework."],
+        )
+        digests = harvest(str(tmp_path), limit=0)
+        assert len(digests) == 0, f"Expected 0 digests, got {len(digests)}"
+
+    def test_harvest_filters_sleep_cycle_marker_variants(self, tmp_path):
+        """Multiple sleep-cycle markers should all trigger filtering."""
+        markers = [
+            "evolving-skills",
+            "EVOLVING-SKILLS",
+            "sleep cycle",
+            "sleep_cycle",
+            "BEGIN AGENT-EXPERIENCE",
+        ]
+        for i, marker in enumerate(markers):
+            p = tmp_path / f"sleep_{i}.jsonl"
+            _make_session_jsonl(
+                str(p),
+                [f"Let's work on the {marker} project today."],
+            )
+        digests = harvest(str(tmp_path), limit=0)
+        assert len(digests) == 0, (
+            f"Expected 0 digests for sleep-cycle markers, got {len(digests)}"
+        )
+
+    def test_harvest_keeps_normal_sessions(self, tmp_path):
+        """Normal coding sessions should NOT be filtered out."""
+        p = tmp_path / "normal_session.jsonl"
+        _make_session_jsonl(
+            str(p),
+            ["Fix the login bug in auth.py and add tests"],
+            tools=["Bash"],
+        )
+        digests = harvest(str(tmp_path), limit=0)
+        assert len(digests) == 1
+        assert "Fix the login bug" in digests[0].user_prompts[0]
+
+    def test_harvest_filters_e2e_validation_output(self, tmp_path):
+        """Transcripts from e2e_validation / analyze_real runs should be filtered."""
+        markers = [
+            "e2e_validation",
+            "analyze_real",
+        ]
+        for i, marker in enumerate(markers):
+            p = tmp_path / f"e2e_{i}.jsonl"
+            _make_session_jsonl(
+                str(p),
+                [f"Running {marker} on the output to verify correctness."],
+            )
+        digests = harvest(str(tmp_path), limit=0)
+        assert len(digests) == 0, (
+            f"Expected 0 digests for e2e markers, got {len(digests)}"
+        )
+
 
 # ── Mine ─────────────────────────────────────────────────────────────────────
 
